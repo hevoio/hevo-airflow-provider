@@ -1,0 +1,186 @@
+version: 2.1
+orbs:
+  gh: circleci/github-cli@2.3.0
+  jq: circleci/jq@3.0.0
+
+jobs:
+  validate-new-repo-json:
+    machine:
+      image: default
+    resource_class: medium
+    shell: /bin/bash --login
+    working_directory: ~/project
+    environment:
+      GITHUB_TOKEN: GH_TOKEN
+    steps:
+      - checkout:
+          path: ~/project
+      - gh/setup
+      - jq/install:
+          override: true
+          version: jq-1.7
+      - run:
+          name: Validate new repo input provided
+          command: |
+            missing_fields=$(./.circleci/validate-json.sh)
+            echo $missing_fields
+            if [[ -z $missing_fields ]]; then
+              echo "Valid json. Moving ahead with repo creation"
+            else
+              echo "Missing fields found : $missing_fields"
+              exit 1
+            fi
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bash.env
+  new-repo-creation:
+    machine:
+      image: default
+    resource_class: medium
+    shell: /bin/bash --login
+    working_directory: ~/project
+    environment:
+      GITHUB_TOKEN: GH_ADMIN_TOKEN
+    steps:
+      - checkout:
+          path: ~/project
+      - gh/setup
+      - jq/install:
+          override: true
+          version: jq-1.7
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run: 
+          name: Setup java and maven if repo type is java
+          command: |
+            if [[ "java" == $repo_language ]]; then
+              echo "Java type repo configuration found"
+              curl -s "https://get.sdkman.io" | bash
+              echo sdkman_auto_answer=true > $HOME/.sdkman/etc/config
+              echo sdkman_auto_selfupdate=true >> $HOME/.sdkman/etc/config
+              source "$HOME/.sdkman/bin/sdkman-init.sh"
+              echo 'export SDKMAN_DIR="$HOME/.sdkman"' >> $BASH_ENV
+              echo 'source "$HOME/.sdkman/bin/sdkman-init.sh"' >> $BASH_ENV
+              cp configs/.sdkmanrc .
+              sdk env install
+            fi
+      - run:
+          name: Create new repo using template
+          command: |
+            gh repo create ${repo_full_name} -p hevoio/hevo-repo-generator --private -d "${repo_description}"
+
+            # setup rules for new repo
+            # add teams
+            gh api --method PUT /orgs/hevoio/teams/infra/repos/${repo_full_name} -f permission='push'
+            gh api --method PUT /orgs/hevoio/teams/dev/repos/${repo_full_name} -f permission='push'
+
+            # setup dev branch rules
+            gh repo edit ${repo_full_name} --default-branch dev --delete-branch-on-merge --enable-merge-commit=false --enable-rebase-merge --enable-squash-merge
+            gh api --method PATCH /repos/${repo_full_name} -f squash_merge_commit_title='PR_TITLE' -f squash_merge_commit_message='COMMIT_MESSAGES'
+
+            # setup homer hook
+            gh api repos/${repo_full_name}/hooks --input configs/hook.json
+
+            # setup branch restrictions
+            repository_id=$(gh api graphql \
+              -f query="$(cat configs/repo-query.ql)" \
+              -f operationName=getRepositoryId \
+              -F owner=hevoio -F repo=${repo_name} | jq -r '.data .repository .id')
+            gh api graphql \
+              -f query="$(cat configs/repo-query.ql)" \
+              -f operationName=addBranchProtection \
+              -F repositoryId=${repository_id} -F branchPattern=dev
+            gh api graphql \
+              -f query="$(cat configs/repo-query.ql)" \
+              -f operationName=addBranchProtection \
+              -F repositoryId=${repository_id} -F branchPattern=release/*
+
+            # make 91pratyush as admin
+            gh api --method PUT /repos/${repo_full_name}/collaborators/91pratyush -f permission='admin'
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:721iHdvInx4iFO+tnXsFTec7AJQqwrm+jd+S9EF8dBs"
+      - run:
+          name: Add public key to .ssh directory.
+          command: echo ${GITHUB_ECDSA_PUBLIC} > ~/.ssh/id_rsa_848d8303cbe1bc703d9772fc10270a3e.pub
+      - run:
+          name: Setup language specific repo configuration
+          command: |
+            set -e
+            slack_message="*New Repo creation status :*\n"
+            slack_message+="*Requestor:* ${CIRCLE_USERNAME}\n"
+            slack_message+="*New repo URL:* https://github.com/${repo_full_name}\n"
+            gh repo clone ${repo_full_name}
+            sleep 10
+            cd ${repo_name}
+            # update README.md
+            sed -i "1s|^|Confluence URL - ${confluence_url}\n|" configs/README.md
+            sed -i "1s|^|# ${repo_name}\n\n|" configs/README.md
+            cp configs/README.md .
+
+            # udpate codeowners
+            echo "*    ${code_owners}" | cat - CODEOWNERS > temp && mv temp CODEOWNERS
+
+            #copy git hooks
+            cp -r configs/bin .
+            
+            # setup repo as per language
+            mv .circleci/config.yml .circleci/create-repo-config.yml
+            if [[ "java" == $repo_language ]]; then
+              mvn install:install-file -Dfile=configs/hevo-java-archetype-1.0.0-SNAPSHOT.jar \
+                -DgroupId=io.hevo -DartifactId=hevo-java-archetype -Dversion=1.0.0-SNAPSHOT -Dpackaging=jar
+              mvn archetype:generate \
+                -DarchetypeGroupId=io.hevo \
+                -DarchetypeArtifactId=hevo-java-archetype \
+                -DarchetypeVersion=1.0.0-SNAPSHOT \
+                -DgroupId=${group_id} \
+                -DartifactId=${artefact_id} \
+                -DinteractiveMode=false -DarchetypeCatalog=local
+              if [[ "service" == $repo_type ]]; then
+                sed -i "s/service_name_here/$artefact_id/g" configs/base-circleci-configs/java-config-service.yml
+                mv configs/base-circleci-configs/java-config-service.yml .circleci/config.yml
+              else
+                mv configs/base-circleci-configs/java-config-library.yml .circleci/config.yml
+              fi
+            else
+              mv configs/base-circleci-configs/non-java-config.yml .circleci/config.yml
+            fi
+            rm .circleci/create-repo-config.yml
+            # clean up files
+            rm -rf configs
+            rm .circleci/validate-json.sh
+            rm -rf repos
+            mv -f ${artefact_id}/{.,}* . || true
+            git add .
+            git commit -m "feat: sets up repo with circleci config"
+            git push origin dev
+
+            #notify on slack
+            curl --silent \
+              -X POST \
+              -H "Accept: application/json" \
+              "${DEVX_NOTIFICATION_SLACK_URL}" \
+              -d '{"text": "'"${slack_message}"'"}'
+            
+workflows:
+  PR check workflow:
+    jobs:
+      - validate-new-repo-json:
+          context:
+            - org-global
+          filters:
+            branches:
+              only: /.*/
+      - new-repo-creation:
+          context:
+            - org-global
+          requires:
+            - validate-new-repo-json
+          filters:
+            branches:
+              only: dev

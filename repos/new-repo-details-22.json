@@ -1,0 +1,11 @@
+{
+  "repo-name": "hevo-ui-toolkit",
+  "code-owners": "@divy221b @shoaib90 @surajpoddar16 @viswassaripalli",
+  "repo-description": "Hevo toolkit that contains common styles and components for building Hevo UI",
+  "team": "dev",
+  "jira-id": "H2-1723",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3576332321/Hevo+UI+toolkit",
+  "repo-config": {
+    "language": "general"
+  }
+}

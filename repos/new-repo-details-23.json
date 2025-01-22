@@ -1,0 +1,11 @@
+{
+  "repo-name": "hevo-circleci-orb",
+  "code-owners": "@hevoio/infra",
+  "repo-description": "Hevo centric CircleCI orb to house all common, CI related scripts and functions at one place",
+  "team": "infra",
+  "jira-id": "DEVX-142",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEVX/pages/3586162690/CI+improvements+for+Hevo2.0+services",
+  "repo-config": {
+    "language": "general"
+  }
+}

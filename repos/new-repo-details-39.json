@@ -1,0 +1,14 @@
+{
+  "repo-name": "oas-spec-generator",
+  "code-owners": "@kislay98 @amit-hevodata",
+  "repo-description": "A OpenAPI and connector code generator. This will generate code for Generic Connector of hevo-sdk.",
+  "team": "dev",
+  "jira-id": "HEVO-15518",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3787653123/LLM+Based+Connector+Development",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "spec-generator",
+    "repo_type": "service"
+  }
+}

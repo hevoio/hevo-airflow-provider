@@ -1,0 +1,13 @@
+{
+  "repo-name": "connector-framework",
+  "code-owners": "@NitinBindal-Hevo, @talha31093",
+  "repo-description": "This repository contains the code for the Connector framework and Connector service.",
+  "team": "dev",
+  "jira-id": "H2-425",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3133800654/Connector+Framework",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "connector-framework"
+  }
+}

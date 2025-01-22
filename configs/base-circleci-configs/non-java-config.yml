@@ -1,0 +1,36 @@
+version: 2.1
+orbs:
+  gh: circleci/github-cli@2.2.0
+
+jobs:
+  build:
+    parameters:
+      target_branch:
+        type: string
+        default: ""
+    machine:
+      image: default
+    resource_class: medium
+    shell: /bin/bash --login
+    working_directory: ~/project/
+    environment:
+      GITHUB_TOKEN: GH_TOKEN
+    steps:
+      - checkout:
+          path: ~/project
+      - gh/setup
+      - run:
+          name: Build artefact
+          command: |
+            echo "add your build logic here"
+
+workflows:
+  project-ci:
+    jobs:
+      - build:
+          target_branch: "^(dev)|^(release*)"
+          context:
+            - org-global
+          filters:
+            branches:
+              only: /.*/

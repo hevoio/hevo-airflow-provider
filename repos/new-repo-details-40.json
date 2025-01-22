@@ -1,0 +1,14 @@
+{
+  "repo-name": "saas-connector",
+  "code-owners": "@talha31093 @faizan-hevo @sumantp89",
+  "repo-description": "Saas Connector on top of Generic Connector",
+  "team": "dev",
+  "jira-id": "H2-3936",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/4085612584/Saas+Connector",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "saas-connector",
+    "repo_type": "lib"
+  }
+}

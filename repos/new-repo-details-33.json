@@ -1,0 +1,14 @@
+{
+  "repo-name": "salesforce-connector",
+  "code-owners": "@talha31093 @faizan-hevo",
+  "repo-description": "Salesforce connector on top of hevo-sdk",
+  "team": "dev",
+  "jira-id": "H2-2668",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3334602843/Connector+Framework+Salesforce",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "salesforce-connector",
+    "repo_type": "lib"
+  }
+}

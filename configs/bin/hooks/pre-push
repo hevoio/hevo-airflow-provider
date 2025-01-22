@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Check branch name validity
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+REGEX="^((feat|bugfix|hotfix|revert)\/([A-Z0-9]+)-([0-9]+)\/(.+))|(merge\/no-ref\/(.+))$"
+echo "$BRANCH"
+if [[ ! $BRANCH =~ $REGEX ]]; then
+  echo "$REGEX"
+  echo -e "\033[0;31mYour commit violates branch name convention and hence blocked from pushing to remote.\033[0m"
+  echo "You can refer to https://hevodata.atlassian.net/wiki/spaces/DEVX/pages/3132358657/Branch+naming+and+Commit+message+convention+Hevo for details"
+  echo "Please rename your branch with '(feat|fix|revert)/JIRA-ID/description' or 'merge/no-op/description' syntax"
+  echo "Please use the following format (examples):"
+  echo "feat/DEVX-123/one-liner-branch-name"
+  echo "fix/INT-1234/short-branch-name"
+  exit 1
+fi

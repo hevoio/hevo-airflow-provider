@@ -1,0 +1,11 @@
+{
+  "repo-name": "sentinel",
+  "code-owners": "@sar009",
+  "repo-description": "Hevo 2.0 Automation.",
+  "team": "dev",
+  "jira-id": "H2-537",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/C0/pages/3182886914/Getting+Started+with+Automation+Autobot",
+  "repo-config": {
+    "language": "general"
+  }
+}

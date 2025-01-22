@@ -1,0 +1,13 @@
+{
+  "repo-name": "dz-oracle",
+  "code-owners": "@shashank-hevo @abhilash",
+  "repo-description": "This repo contains the Debezium Oracle connector",
+  "team": "dev",
+  "jira-id": "H2-574",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3197763843/Oracle",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "dz-oracle"
+  }
+}

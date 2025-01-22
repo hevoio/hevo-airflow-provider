@@ -1,0 +1,14 @@
+{
+  "repo-name": "virtual-connector",
+  "code-owners": "@talha31093 @faizan-hevo @hitaishidesai18 @sar009 @sashireddy",
+  "repo-description": "A virtual Connector using hevo-sdk. This will generate data using a seeded random generator. This is useful for testing system beyond the Ingestor layer.",
+  "team": "dev",
+  "jira-id": "H2-3287",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3281682952/Connector+Framework+Contract#SampleConnector",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "virtual-connector",
+    "repo_type": "lib"
+  }
+}

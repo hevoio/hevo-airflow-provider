@@ -1,0 +1,14 @@
+{
+  "repo-name": "hevo-sdk",
+  "code-owners": "@talha31093 @faizan-hevo",
+  "repo-description": "Connector Framework SDK",
+  "team": "dev",
+  "jira-id": "H2-2668",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3120562482/Connector+Framework+Architecture+Design+Document",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "hevo-sdk",
+    "repo_type": "lib"
+  }
+}

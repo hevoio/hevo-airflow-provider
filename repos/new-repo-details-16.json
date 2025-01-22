@@ -1,0 +1,13 @@
+{
+  "repo-name": "s3-connector",
+  "code-owners": "@shashank-hevo @abhilash",
+  "repo-description": "This repo contains the S3 connector",
+  "team": "dev",
+  "jira-id": "H2-574",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3361308679/S3+Source+-+2.0",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "s3-connector"
+  }
+}

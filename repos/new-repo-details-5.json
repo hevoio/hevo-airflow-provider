@@ -1,0 +1,13 @@
+{
+  "repo-name": "oathkeeper",
+  "code-owners": "@sar009",
+  "repo-description": "Oathkeeper performs Authentication and Autherization in API Gateway",
+  "team": "dev",
+  "jira-id": "H2-402",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3337256974/API+Gateway",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "oathkeeper"
+  }
+}

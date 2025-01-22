@@ -1,0 +1,14 @@
+{
+  "repo-name": "sqlserver-connector",
+  "code-owners": "@talha31093 @faizan-hevo @hitaishidesai18",
+  "repo-description": "SQL Connector using hevo-sdk",
+  "team": "dev",
+  "jira-id": "H2-3061",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3281682952/Connector+Framework+Contract#SampleConnector",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "sqlserver-connector",
+    "repo_type": "lib"
+  }
+}

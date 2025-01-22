@@ -1,0 +1,11 @@
+{
+  "repo-name": "butcher",
+  "code-owners": "@adrijshikhar",
+  "repo-description": "Performance testing for Hevo 2.0 services",
+  "team": "dev",
+  "jira-id": "H2-1243",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3487268869/Performance+Testing",
+  "repo-config": {
+    "language": "general"
+  }
+}

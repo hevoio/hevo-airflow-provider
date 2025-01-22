@@ -1,0 +1,11 @@
+{
+  "repo-name": "apisix-gateway",
+  "code-owners": "@sar009",
+  "repo-description": "Configuration for APISIX api gateway.",
+  "team": "dev",
+  "jira-id": "H2-402",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3337256974/API+Gateway",
+  "repo-config": {
+    "language": "general"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "repo-name": "dz-mysql",
+  "code-owners": "@shashank-hevo @abhilash",
+  "repo-description": "This repo contains the Debezium MySQL connector",
+  "team": "dev",
+  "jira-id": "H2-574",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3421175831/MySQL+WIP",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "dz-mysql"
+  }
+}

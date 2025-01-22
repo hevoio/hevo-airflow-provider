@@ -1,0 +1,13 @@
+{
+  "repo-name": "hevo-clients",
+  "code-owners": "@shashank-hevo @abhilash @Anubhav410 @talha31093 @lazy-ninja",
+  "repo-description": "This repo contains the Hevo clients",
+  "team": "dev",
+  "jira-id": "H2-1690",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3597205598/Hevo+2.0+Microservices+Repository+Guidelines",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "clients"
+  }
+}

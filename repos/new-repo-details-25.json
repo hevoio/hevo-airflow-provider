@@ -1,0 +1,13 @@
+{
+  "repo-name": "alerts-service",
+  "code-owners": "@abhilash @nikhil-hevo @krishnaHevo",
+  "repo-description": "Alerts service for Hevo",
+  "team": "dev",
+  "jira-id": "H2-1690",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/~770425474/pages/3275882501/HLD+Alerts+Notifications+2.0+WIP",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.hevo",
+    "artefact-id": "alerts-service"
+  }
+}

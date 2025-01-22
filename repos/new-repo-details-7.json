@@ -1,0 +1,11 @@
+{
+    "repo-name": "hevo-fluent-bit",
+    "code-owners": "@adrijshikhar, @abhilash",
+    "repo-description": "hevo configured fluent-bit",
+    "team": "dev",
+    "jira-id": "H2-457",
+    "confluence-url": "https://hevodata.atlassian.net/wiki/x/XoCDxg",
+    "repo-config": {
+        "language": "general"
+    }
+}

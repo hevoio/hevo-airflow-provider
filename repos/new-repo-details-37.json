@@ -1,0 +1,11 @@
+{
+  "repo-name": "cloud-housekeeping",
+  "code-owners": "@hevoio/infra",
+  "repo-description": "Cloud housekeeping tools",
+  "team": "dev",
+  "jira-id": "IN-3395",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/x/BgD16Q",
+  "repo-config": {
+    "language": "general"
+  }
+}

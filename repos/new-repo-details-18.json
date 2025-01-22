@@ -1,0 +1,11 @@
+{
+  "repo-name": "hevo-2-starter",
+  "code-owners": "@utsav-varia",
+  "repo-description": "One click deployment via docker compose files for Hevo 2.0",
+  "team": "dev",
+  "jira-id": "H2-103",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3496771585/Hevo+2.0+Starter",
+  "repo-config": {
+    "language": "general"
+  }
+}

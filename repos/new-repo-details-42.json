@@ -1,0 +1,11 @@
+{
+  "repo-name": "hevo-airflow-provider",
+  "code-owners": "@RAMYA-CP @abhilash",
+  "repo-description": "Hevo Airflow Provider",
+  "team": "dev",
+  "jira-id": "H2-3526",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3936780370/TRD+for+External+Orchestration",
+  "repo-config": {
+    "language": "general"
+  }
+}

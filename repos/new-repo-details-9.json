@@ -1,0 +1,11 @@
+{
+    "repo-name": "not-auto-bot",
+    "code-owners": "@pungaa @abhilash",
+    "repo-description": "Repo for external QA",
+    "team": "ext_qa",
+    "jira-id": "IN-0000",
+    "confluence-url": "https://hevodata.atlassian.net/wiki/x/XoCDxg",
+    "repo-config": {
+        "language": "general"
+    }
+}

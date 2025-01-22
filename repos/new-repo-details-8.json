@@ -1,0 +1,13 @@
+{
+  "repo-name": "hevo-debezium",
+  "code-owners": "@suhas-hevo @abhilash",
+  "repo-description": "This repo contains a clone of the debezium repo",
+  "team": "dev",
+  "jira-id": "INT-7926",
+  "confluence-url": "https://hevodata.atlassian.net/wiki/spaces/~71202090e71727d8ec4a97a09dd788ba1eeaf5/pages/3341223033/Observability+-+Debezium+HLD",
+  "repo-config": {
+    "language": "java",
+    "group-id": "io.debezium",
+    "artefact-id": "hevo-debezium"
+  }
+}
