@@ -1,0 +1,30 @@
+.DS_Store
+.idea
+
+# Virtual environments
+.venv*
+venv*
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# UV
+.python-version
+uv.lock
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Build
+build/
+dist/
+*.egg-info/
