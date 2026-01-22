@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  airflow:
+    build:
+      context: ../..
+      dockerfile: docker/airflow-2.4/Dockerfile
+    container_name: hevo-airflow-2.4
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - PYTHONFAULTHANDLER=true
+    volumes:
+      # Mount DAGs directory for live updates during development
+      - ../../dags:/opt/airflow/dags
+      # Mount logs for debugging
+      - ./logs:/opt/airflow/logs
+      # Persist Airflow database
+      - airflow-db:/opt/airflow
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/opt/airflow/.venv/bin/airflow", "jobs", "check", "--job-type", "SchedulerJob", "--hostname", "$$(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  airflow-db:
+    driver: local

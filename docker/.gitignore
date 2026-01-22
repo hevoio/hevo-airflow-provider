@@ -1,0 +1,17 @@
+# Ignore log directories
+airflow-2.4/logs/
+airflow-3.0/logs/
+
+# Ignore Airflow database files
+airflow-2.4/airflow.db
+airflow-3.0/airflow.db
+
+# Ignore any local environment files
+*.env
+.env.local
+
+# Ignore any temporary or cache files
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
