@@ -10,8 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "apache-airflow>=2.4.0",
-    "aiohttp==3.13.2",
-    "requests==2.32.5"
+    "aiohttp==3.13.2"
 ]
 
 [project.optional-dependencies]
@@ -26,7 +25,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 indent-width = 4
-target-version =  ['py39', 'py310', 'py311', 'py312', 'py313']
+target-version = "py39"
 
 [tool.ruff.lint]
 select = [
@@ -82,11 +81,22 @@ ignore = [
     "EM101", "EM102",
     "PLR2004",
     "PTH118",
-    "S101", "S110", "S113", "S311", "S603", "S608",
+    "S101", "S105", "S110", "S113", "S311", "S603", "S608",
+    "BLE001",  # Allow catching Exception in hooks/triggers
+    "SIM117",  # Allow nested with statements in tests
 ]
 fixable = ["ALL"]
 unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore datetime timezone warnings in DAG examples (Airflow commonly uses naive datetime)
+"dags/*.py" = ["DTZ001", "DTZ005", "PLC0415"]
+# Ignore type annotations and unused arguments in tests (pytest fixtures)
+"tests/**/*.py" = ["ANN001", "ANN201", "ARG002", "SLF001", "PLC0415"]
+# Ignore unused context argument in operators/sensors (required by Airflow interface)
+"src/airflow/hevo/operators/*.py" = ["ARG002"]
+"src/airflow/hevo/sensors/*.py" = ["ARG002"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"

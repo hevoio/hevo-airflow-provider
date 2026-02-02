@@ -1,7 +1,7 @@
 """
 Example DAG demonstrating:
 1. Two HevoOperator tasks triggering Hevo syncs with different pipeline IDs
-2. DBT execution to transform the synced data
+2. DBT execution to transform the synced data.
 
 This DAG shows a typical workflow:
 - Load data from multiple sources via Hevo pipelines
@@ -10,10 +10,10 @@ This DAG shows a typical workflow:
 
 from datetime import datetime, timedelta
 
-from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-from airflow.hevo.operators.hevo_operator import HevoOperator
+from airflow import DAG
+from airflow.hevo.operators import HevoPipelineOperator
 
 # Default arguments for the DAG
 default_args = {
@@ -24,15 +24,14 @@ default_args = {
 }
 
 with DAG(
-    'hevo_dbt_example',
+    "hevo_dbt_example",
     default_args=default_args,
-    description='Two Hevo syncs with different pipeline IDs → DBT transformation',
+    description="Two Hevo syncs with different pipeline IDs → DBT transformation",
     start_date=datetime(2024, 1, 1),
-    tags={'hevo', 'example', 'dbt', 'transformation'},
+    tags={"hevo", "example", "dbt", "transformation"},
 ) as dag:
-    
     # Task 1: Trigger Hevo sync for Pipeline 1 using HevoOperator
-    trigger_pipeline_1 = HevoOperator(
+    trigger_pipeline_1 = HevoPipelineOperator(
         task_id="trigger_hevo_pipeline_1",
         pipeline_id="{{ var.value.pipeline_id_1 }}",  # First pipeline ID
         connection_id="hevo_airflow_conn_id",
@@ -42,7 +41,7 @@ with DAG(
     )
 
     # Task 2: Trigger Hevo sync for Pipeline 2 using HevoOperator
-    trigger_pipeline_2 = HevoOperator(
+    trigger_pipeline_2 = HevoPipelineOperator(
         task_id="trigger_hevo_pipeline_2",
         pipeline_id="{{ var.value.pipeline_id_2 }}",  # Second pipeline ID
         connection_id="hevo_airflow_conn_id",

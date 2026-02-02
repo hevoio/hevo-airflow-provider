@@ -10,7 +10,7 @@ This guide provides instructions for setting up the Hevo Airflow Provider packag
 
 ---
 
-## Option 1: Development Setup with UV (Recommended for Contributors)
+## Option 1: Development Setup with UV
 
 ### Step 1: Install UV
 
@@ -25,15 +25,13 @@ brew install uv
 ### Step 2: Clone Repository
 
 ```bash
-git clone https://github.com/your-org/hevo-airflow-provider.git
+git clone https://github.com/hevoio/hevo-airflow-provider.git
 cd hevo-airflow-provider
 ```
 
 ### Step 3: Setup Development Environment
 
 ```bash
-make setup
-# or manually:
 bash bin/setup-uv.sh
 ```
 
@@ -52,34 +50,23 @@ source .venv/bin/activate
 
 ```bash
 # Run tests
-make test
+uv run pytest
 
 # Run all checks
-make check-all
+uv run ruff check && uv run mypy src && uv run pytest
 ```
 
 ### Development Commands
 
-With `make`:
-```bash
-make help          # Show all available commands
-make test          # Run tests
-make test-cov      # Run tests with coverage report
-make lint          # Run linter
-make lint-fix      # Auto-fix lint issues
-make format        # Format code
-make typecheck     # Run type checker
-make check-all     # Run all checks and tests
-make build         # Build distribution packages
-```
-
-With `uv` directly:
 ```bash
 uv run pytest                 # Run tests
+uv run pytest --cov --cov-report=html  # Run tests with coverage report
 uv run pytest tests/operators/test_hevo_operator.py  # Run specific test
 uv run ruff check src/        # Lint
-uv run ruff format src/       # Format
+uv run ruff check --fix src/  # Auto-fix lint issues
+uv run ruff format src/       # Format code
 uv run mypy src/              # Type check
+python -m build               # Build distribution packages
 ```
 
 ---
@@ -89,7 +76,7 @@ uv run mypy src/              # Type check
 ### Step 1: Clone Repository
 
 ```bash
-git clone https://github.com/your-org/hevo-airflow-provider.git
+git clone https://github.com/hevoio/hevo-airflow-provider.git
 cd hevo-airflow-provider
 ```
 
@@ -141,7 +128,7 @@ pip install apache-airflow-providers-hevo
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/hevo-airflow-provider.git
+git clone https://github.com/hevoio/hevo-airflow-provider.git
 cd hevo-airflow-provider
 
 # Install in your Airflow environment
@@ -290,12 +277,6 @@ DAGs are automatically available in the Docker container. Just navigate to the A
 - `hevo_sync_no_wait` - Fire-and-forget mode
 - `hevo_dbt_example` - DBT integration example
 
-### Using Make Command (Local Development)
-
-```bash
-make run-example EXAMPLE=triggerer_example_dag
-```
-
 ---
 
 ## Verifying Installation
@@ -304,9 +285,9 @@ After setup, verify the provider is correctly installed:
 
 ### Local Setup (UV/pip):
 ```bash
-python -c "from airflow.hevo.operators.hevo_operator import HevoOperator; print('✓ HevoOperator imported successfully')"
-python -c "from airflow.hevo.sensors.hevo_sensor import HevoSensor; print('✓ HevoSensor imported successfully')"
-python -c "from airflow.hevo.hooks.hevo_pipeline_hook import HevoPipelineHook; print('✓ HevoPipelineHook imported successfully')"
+python -c "from airflow.hevo.operators import HevoOperator; print('✓ HevoOperator imported successfully')"
+python -c "from airflow.hevo.sensor import HevoSensor; print('✓ HevoSensor imported successfully')"
+python -c "from airflow.hevo.hooks import HevoPipelineHook; print('✓ HevoPipelineHook imported successfully')"
 ```
 
 ### Airflow Provider Check:
@@ -328,7 +309,7 @@ docker exec -it <container-name> airflow providers list | grep hevo
 1. Read [CLAUDE.md](CLAUDE.md) for architecture and development guidelines
 2. Review [CONFIGURATION_PARAMETERS.md](CONFIGURATION_PARAMETERS.md) for parameter details
 3. Check existing tests in `tests/` for examples
-4. Run `make check-all` before committing changes
+4. Run all checks before committing changes: `uv run ruff check && uv run mypy src && uv run pytest`
 
 ### For Users (Using Provider in DAGs):
 
@@ -341,21 +322,21 @@ docker exec -it <container-name> airflow providers list | grep hevo
 
 ```python
 from airflow import DAG
-from airflow.hevo.operators.hevo_operator import HevoOperator
+from airflow.hevo.operators import HevoPipelineOperator
 from datetime import datetime
 
 with DAG(
-    "my_first_hevo_dag",
-    start_date=datetime(2024, 1, 1),
-    schedule_interval="@daily",
-    catchup=False
+        "my_first_hevo_dag",
+        start_date=datetime(2024, 1, 1),
+        schedule_interval="@daily",
+        catchup=False
 ) as dag:
-    sync_pipeline = HevoOperator(
-        task_id="sync_pipeline",
-        pipeline_id=123,  # Your Hevo pipeline ID
-        deferrable=True,
-        wait_for_completion=True
-    )
+  sync_pipeline = HevoPipelineOperator(
+    task_id="sync_pipeline",
+    pipeline_id=123,  # Your Hevo pipeline ID
+    deferrable=True,
+    wait_for_completion=True
+  )
 ```
 
 ---
@@ -366,9 +347,6 @@ with DAG(
 
 **Problem:** `uv: command not found`
 - **Solution:** Install uv using the installation command above, then restart your terminal
-
-**Problem:** `make: command not found`
-- **Solution:** Install make: `sudo apt-get install build-essential` (Ubuntu) or `brew install make` (macOS)
 
 **Problem:** Virtual environment activation fails
 - **Solution:** Ensure you're in the project directory and run `source .venv/bin/activate`
@@ -433,7 +411,6 @@ with DAG(
 
 - [Apache Airflow Documentation](https://airflow.apache.org/docs/)
 - [Hevo API Documentation](https://hevo-edge.readme.io/reference)
-- [Hevo Confluence TRD](https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3936780370/TRD+for+External+Orchestration)
 - [UV Package Manager](https://github.com/astral-sh/uv)
 - [Project README](README.md)
 - [Configuration Parameters](CONFIGURATION_PARAMETERS.md)
@@ -464,8 +441,6 @@ For issues and questions:
 
 ```bash
 # UV setup
-make clean-venv
-# or manually
 rm -rf .venv
 
 # pip setup

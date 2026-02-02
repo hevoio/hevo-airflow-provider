@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any
 
 from pydantic import Field, field_validator
 
@@ -22,15 +21,14 @@ class JobStatus(str, Enum):
     """
 
     IN_PROGRESS = "IN_PROGRESS"
+    CANCELLING = "CANCELLING"
     COMPLETED = "COMPLETED"
     COMPLETED_WITH_FAILURES = "COMPLETED_WITH_FAILURES"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     SKIPPED = "SKIPPED"
     DEFERRED = "DEFERRED"
-    DEFERRED_WITH_FAILURE = "DEFERRED_WITH_FAILURE"
-    QUEUED = "QUEUED"
-    PENDING = "PENDING"
+    DEFERRED_WITH_FAILURES = "DEFERRED_WITH_FAILURES"
     UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
@@ -56,32 +54,15 @@ class JobCompletionStatus(str, Enum):
     - COMPLETED_WITH_FAILURES: Job finished but some records failed
       (only returned as success when accept_completed_with_failures=True)
     - FAILED: Job failed, was cancelled, skipped, or deferred with failure
-      (FAILED, CANCELLED, SKIPPED, DEFERRED, DEFERRED_WITH_FAILURE, or
+      (FAILED, CANCELLED, SKIPPED, DEFERRED, DEFERRED_WITH_FAILURES, or
       COMPLETED_WITH_FAILURES when not accepting failures)
-    - PENDING: Job is still running (IN_PROGRESS, QUEUED, PENDING)
+    - PENDING: Job is still running (IN_PROGRESS, CANCELLING)
     """
 
     COMPLETED = "completed"
     COMPLETED_WITH_FAILURES = "completed_with_failures"
     FAILED = "failed"
     PENDING = "pending"
-
-
-class JobStatistics(BaseResponse):
-    """Statistics about job execution."""
-
-    rows_loaded: Optional[int] = Field(None, description="Number of rows successfully loaded")
-    rows_failed: Optional[int] = Field(None, description="Number of rows that failed to load")
-    bytes_transferred: Optional[int] = Field(None, description="Total bytes transferred")
-    duration_seconds: Optional[float] = Field(None, description="Job duration in seconds")
-
-
-class JobError(BaseResponse):
-    """Error information for failed jobs."""
-
-    error_code: Optional[str] = Field(None, description="Error code")
-    error_message: Optional[str] = Field(None, description="Human-readable error message")
-    error_details: Optional[dict[str, Any]] = Field(None, description="Additional error details")
 
 
 class Job(BaseResponse):
@@ -91,18 +72,37 @@ class Job(BaseResponse):
     Returned by:
     - GET /api/v1/pipelines/{id}/jobs/{job_id}
     - GET /api/v1/pipelines/{id}/jobs (list endpoint)
+
+    All timestamp fields (created_ts, updated_ts) are in milliseconds since epoch.
+    All duration and latency fields are in milliseconds.
     """
 
-    job_id: str = Field(..., description="Unique job identifier")
-    type: Union[JobType, str] = Field(..., description="Job type (INCREMENTAL, HISTORICAL)")
-    status: Union[JobStatus, str] = Field(..., description="Current job status")
-    created_at: Optional[datetime] = Field(None, description="Job creation timestamp")
-    started_at: Optional[datetime] = Field(None, description="Job start timestamp")
-    completed_at: Optional[datetime] = Field(None, description="Job completion timestamp")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
-    statistics: Optional[JobStatistics] = Field(None, description="Job execution statistics")
-    error: Optional[JobError] = Field(None, description="Error information if job failed")
-    metadata: Optional[dict[str, Any]] = Field(None, description="Additional job metadata")
+    job_id: str = Field(..., description="Unique job identifier (UUID)")
+    type: JobType | str = Field(..., description="Job type (INCREMENTAL, HISTORICAL, TRUNCATE_AND_LOAD)")
+    status: JobStatus | str = Field(..., description="Current job status")
+    created_ts: int = Field(..., description="Job creation timestamp in milliseconds since epoch")
+    updated_ts: int = Field(..., description="Last update timestamp in milliseconds since epoch")
+
+    # Event metrics
+    events_ingested: int = Field(..., description="Total events extracted from sources")
+    events_loaded: int = Field(..., description="Events successfully written to destination")
+    events_failed: int = Field(..., description="Events that failed during loading")
+
+    # Object metrics
+    objects_success: int = Field(..., description="Successfully processed objects")
+    objects_queued: int = Field(..., description="Objects awaiting processing")
+    objects_skipped: int = Field(..., description="Objects bypassed during execution")
+    objects_failed: int = Field(..., description="Objects that encountered errors")
+
+    # Billing metrics
+    billable_events: int = Field(..., description="Chargeable event count")
+    non_billable_events: int = Field(..., description="Non-chargeable event count")
+
+    # Performance metrics
+    duration: int = Field(..., description="Execution time in milliseconds")
+    min_latency: int | None = Field(None, description="Minimum object-level latency in milliseconds")
+    max_latency: int | None = Field(None, description="Maximum object-level latency in milliseconds")
+    mean_latency: int | None = Field(None, description="Average latency across objects in milliseconds")
 
     @field_validator("type", mode="before")
     @classmethod
@@ -121,9 +121,8 @@ class Job(BaseResponse):
             return JobType(str(value))
         except ValueError:
             logger.warning(
-                "Unknown job type '%s' received from API. Please update JobType enum. "
-                "Defaulting to JobType.UNKNOWN",
-                value
+                "Unknown job type '%s' received from API. Please update JobType enum. Defaulting to JobType.UNKNOWN",
+                value,
             )
             return JobType.UNKNOWN
 
@@ -146,7 +145,7 @@ class Job(BaseResponse):
             logger.warning(
                 "Unknown job status '%s' received from API. Please update JobStatus enum. "
                 "Defaulting to JobStatus.UNKNOWN",
-                value
+                value,
             )
             return JobStatus.UNKNOWN
 
@@ -163,22 +162,12 @@ class Job(BaseResponse):
         return self.status in terminal_states
 
     @property
-    def is_successful(self) -> bool:
-        """Check if the job completed successfully."""
-        return self.status == JobStatus.COMPLETED
-
-    @property
-    def has_failures(self) -> bool:
-        """Check if the job completed but with some failures."""
-        return self.status == JobStatus.COMPLETED_WITH_FAILURES
-
-    @property
     def is_failed(self) -> bool:
         """Check if the job failed completely."""
         return self.status in {
             JobStatus.FAILED,
             JobStatus.CANCELLED,
-            JobStatus.DEFERRED_WITH_FAILURE,
+            JobStatus.DEFERRED_WITH_FAILURES,
         }
 
 
@@ -192,5 +181,4 @@ class PaginatedJobsResponse(BaseResponse):
 
     data: list[Job] = Field(..., description="List of jobs")
     has_more: bool = Field(..., description="Whether more results are available")
-    next_cursor: Optional[str] = Field(None, description="Cursor for the next page of results")
-    count: Optional[int] = Field(None, description="Total count of jobs (if available)")
+    next_cursor: str | None = Field(None, description="Cursor for the next page of results")

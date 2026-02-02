@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Apache Airflow provider for Hevo Data's External Orchestration API. Enables triggering and monitoring Hevo pipeline syncs from Airflow DAGs.
 
 **API Documentation**: https://hevo-edge.readme.io/reference
-**Confluence TRD**: https://hevodata.atlassian.net/wiki/spaces/DEV/pages/3936780370/TRD+for+External+Orchestration
 
 ## Development Commands
 
@@ -15,7 +14,7 @@ Apache Airflow provider for Hevo Data's External Orchestration API. Enables trig
 
 ```bash
 # Quick setup with uv (recommended)
-make setup                    # Install uv, create venv, install deps, setup hooks
+bash bin/setup-uv.sh          # Install uv, create venv, install deps, setup hooks
 source .venv/bin/activate
 
 # Alternative with pip
@@ -28,30 +27,31 @@ sh bin/add-git-precommit-hook.sh
 ### Testing & Quality
 
 ```bash
-make test                     # Run pytest
-make test-cov                 # Run with coverage report (htmlcov/index.html)
+uv run pytest                 # Run pytest
+uv run pytest --cov --cov-report=html  # Run with coverage report (htmlcov/index.html)
 uv run pytest tests/test_specific.py::test_name  # Single test
 
-make lint                     # Run ruff linter
-make lint-fix                 # Auto-fix lint issues
-make format                   # Format code with ruff
-make typecheck                # Run mypy type checker
-make check-all                # Run all checks and tests
+uv run ruff check             # Run ruff linter
+uv run ruff check --fix       # Auto-fix lint issues
+uv run ruff format            # Format code with ruff
+uv run mypy src               # Run mypy type checker
+uv run ruff check && uv run mypy src && uv run pytest  # Run all checks and tests
 ```
 
 ### Build & Clean
 
 ```bash
-make build                    # Build distribution packages
-make clean                    # Remove build artifacts and caches
-make clean-venv               # Remove virtual environment
+python -m build               # Build distribution packages
+rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache .ruff_cache  # Remove build artifacts and caches
+rm -rf .venv                  # Remove virtual environment
 ```
 
 ### Running Examples
 
 ```bash
-make run-example EXAMPLE=triggerer_example_dag
-# Available examples in dags/ directory
+# Available examples in dag_examples/ directory
+# Copy examples to your Airflow DAGs folder and run via Airflow UI
+cp dag_examples/*.py ~/airflow/dags/
 ```
 
 ## Architecture
@@ -74,16 +74,31 @@ API (Hevo REST API via aiohttp)
 
 **`src/airflow/hevo/hooks/`**
 - `base.py`: `BaseHevoHook` - Foundation for all API interactions (connection mgmt, error handling)
+  - `get_airflow_connection_async()` - Retrieves and caches Airflow connection
+  - `get_auth_from_connection()` - Extracts HTTP Basic Auth credentials from connection
+  - `get_headers()` - Builds standard HTTP headers for API requests
+  - `build_api_url()` - Constructs full API endpoint URL from connection and endpoint path
+  - `execute_api_request_async()` - Core async HTTP request executor with retry logic
 - `hevo_pipeline_hook.py`:
-  - `HevoPipelineHook` - Unified hook with async-first architecture
+  - `HevoPipelineHook` - Unified hook with async-first architecture for pipeline operations
     - Async methods (`*_async`) - All API operations using `aiohttp`
     - Sync wrapper methods - Use `asyncio.run()` to call async methods
+- `hevo_object_hook.py`:
+  - `HevoObjectHook` - Hook for pipeline object operations (tables/collections)
+    - `list_objects_async()` / `list_objects_sync()` - List all objects in a pipeline
+    - `get_object_async()` / `get_object_sync()` - Get specific object details including fields
+    - `refresh_schema_async()` / `refresh_schema_sync()` - Trigger schema refresh
+    - `resync_objects_async()` / `resync_objects_sync()` - Trigger object-level resync
 
 **`src/airflow/hevo/operators/`**
-- `hevo_operator.py`: `HevoOperator` - Trigger pipeline syncs with three execution modes:
-  1. Fire-and-forget (`wait_for_completion=False`)
-  2. Synchronous wait (`deferrable=False, wait_for_completion=True`)
-  3. Deferrable wait (`deferrable=True, wait_for_completion=True`) - **recommended**
+- `hevo_operator.py`: `HevoPipelineOperator` - Trigger pipeline syncs or resyncs with:
+  - **Two pipeline actions**:
+    1. `SYNC_NOW` (default): Regular incremental sync via `POST /pipelines/{id}/actions/sync-now`
+    2. `RESYNC`: Full historical resync via `POST /pipelines/{id}/actions/resync`
+  - **Three execution modes**:
+    1. Fire-and-forget (`wait_for_completion=False`)
+    2. Synchronous wait (`deferrable=False, wait_for_completion=True`)
+    3. Deferrable wait (`deferrable=True, wait_for_completion=True`) - **recommended**
 
 **`src/airflow/hevo/sensors/`**
 - `hevo_sensor.py`: `HevoSensor` - Monitor job completion, supports auto-discovery of active jobs
@@ -120,7 +135,55 @@ The codebase uses an async-first design with sync wrappers:
 - Default to `deferrable=True` for production
 - Only use `deferrable=False` for very short jobs (<5 min) or testing
 
-#### 2. Three Execution Modes
+#### 2. Pipeline Actions
+
+`HevoPipelineOperator` supports two types of pipeline actions via the `action` parameter:
+
+**SYNC_NOW (default)**:
+```python
+HevoPipelineOperator(
+    task_id="sync_pipeline",
+    connection_id="hevo_airflow_conn_id",
+    pipeline_id=123,
+    action=PipelineAction.SYNC_NOW  # Default - can be omitted
+)
+```
+- Triggers regular incremental sync: `POST /api/v1/pipelines/{id}/actions/sync-now`
+- Validates pipeline is in `INITIALIZED` state before triggering
+- Honors `ensure_new_job` parameter (default: True)
+- **Default job type**: `INCREMENTAL`
+- **Use for**: Regular scheduled syncs, incremental data updates
+
+**RESYNC**:
+```python
+HevoPipelineOperator(
+    task_id="resync_pipeline",
+    connection_id="hevo_airflow_conn_id",
+    pipeline_id=123,
+    action=PipelineAction.RESYNC  # Full historical reload
+)
+```
+- Triggers full historical resync: `POST /api/v1/pipelines/{id}/actions/resync`
+- **No validation required** - can be triggered on any pipeline
+- Re-ingests all data from the source (complete historical reload)
+- Ignores `ensure_new_job` parameter
+- **Default job type**: `TRUNCATE_AND_LOAD`
+- **Optional parameter**: `drop_and_load` (default: False) to drop/recreate destination tables
+- **Use for**:
+  - Reprocessing data after schema changes
+  - Recovering from data corruption
+  - Applying new transformations to historical data
+  - Migrating to a new destination with full data reload
+
+**Key Differences**:
+| Feature | SYNC_NOW | RESYNC |
+|---------|----------|--------|
+| Validation | Required (INITIALIZED state) | Not required |
+| Data Scope | Incremental updates | Full historical reload |
+| Duration | Minutes | Hours (depends on data volume) |
+| API Endpoint | `/actions/sync-now` | `/actions/resync` |
+
+#### 3. Three Execution Modes
 
 ```python
 # Mode 1: Fire-and-forget (returns job_id via XCom)
@@ -136,7 +199,7 @@ HevoOperator(deferrable=True, wait_for_completion=True)
 # → Resource-efficient, requires triggerer service
 ```
 
-#### 3. Job Discovery Strategy
+#### 4. Job Discovery Strategy
 
 Both operator and sensor wait for jobs to "appear" after triggering:
 
@@ -145,7 +208,7 @@ Both operator and sensor wait for jobs to "appear" after triggering:
 active_job = None
 for attempt in range(retry_limit):  # Max retry_limit attempts (default: 10)
     try:
-        active_job = hook.find_active_job_by_type(pipeline_id, job_type)
+        active_job = hook.find_active_job_by_type_sync(pipeline_id, job_type)
         if active_job is not None:
             break  # Found the job!
     except AirflowException as e:
@@ -163,7 +226,7 @@ if active_job is None:
 
 **Exception Handling**: `find_active_job_by_type()` raises `AirflowException` when no active jobs are found. The operator/sensor catches this exception and retries, treating it as "job not ready yet" rather than a fatal error.
 
-#### 4. State Abstraction
+#### 5. State Abstraction
 
 Hooks abstract API job states into four canonical states:
 
@@ -180,7 +243,7 @@ def get_job_completion_status(...) -> str:
 
 This shields operators/sensors from API complexity.
 
-#### 5. XCom Communication Pattern
+#### 6. XCom Communication Pattern
 
 Fire-and-forget mode uses XCom for inter-task communication:
 
@@ -200,7 +263,7 @@ sensor = HevoSensor(
 trigger >> sensor
 ```
 
-#### 6. Trigger Serialization
+#### 7. Trigger Serialization
 
 Triggers must be serializable for persistence across Airflow restarts:
 
@@ -312,7 +375,7 @@ from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 
 # Local
-from airflow.hevo.hooks.hevo_hook import HevoPipelineHook
+from airflow.hevo.hooks import HevoPipelineHook
 ```
 
 ### Type Hints
@@ -360,11 +423,10 @@ Declare template fields for Airflow variable/XCom substitution:
 
 ```python
 class HevoOperator(BaseOperator):
-    template_fields = ("pipeline_id", "sync_type", "job_type")
+    template_fields = ("pipeline_id",)
 
     # Enables:
     # pipeline_id="{{ var.value.pipeline_id }}"
-    # job_type="{{ params.job_type }}"
 ```
 
 ## Testing Patterns
@@ -376,7 +438,7 @@ Test individual methods in isolation:
 ```python
 def test_job_status_mapping(mock_hook):
     # Test status abstraction logic
-    assert hook.get_job_completion_status(...) == "completed"
+    assert hook.get_job_completion_status_sync(...) == "completed"
 ```
 
 ### Integration Tests
@@ -424,10 +486,12 @@ async def get_pipeline_objects_async(self, pipeline_id: int) -> list[dict]:
     response = await self.execute_api_request_async("GET", endpoint)
     return response.get("data", [])
 
+
 # 2. Sync wrapper
 def get_pipeline_objects(self, pipeline_id: int) -> list[dict]:
     """Fetch all objects for a pipeline (sync wrapper)."""
     return asyncio.run(self.get_pipeline_objects_async(pipeline_id))
+
 
 # Example with JSON body (for POST/PUT/PATCH)
 async def update_pipeline_config_async(self, pipeline_id: int, config: dict) -> dict:
@@ -436,9 +500,10 @@ async def update_pipeline_config_async(self, pipeline_id: int, config: dict) -> 
     response = await self.execute_api_request_async(
         method="PATCH",
         endpoint=endpoint,
-        json=config  # JSON body for request
+        payload=config  # JSON body for request
     )
     return response
+
 
 def update_pipeline_config(self, pipeline_id: int, config: dict) -> dict:
     """Update pipeline configuration (sync wrapper)."""
@@ -467,7 +532,7 @@ When working in async contexts (like triggers), use async methods directly:
 
 ```python
 # In trigger's run() method
-hook = HevoPipelineHook(pipeline_id=123, connection_id="hevo_default")
+hook = HevoPipelineHook(connection_id="hevo_default")
 
 # Call async methods directly (no asyncio.run needed)
 pipeline = await hook.get_pipeline_async(pipeline_id)
@@ -530,21 +595,39 @@ src/airflow/hevo/
 ├── __init__.py
 ├── hooks/
 │   ├── __init__.py
-│   ├── base.py                 # BaseHevoHook (foundation)
-│   └── hevo_pipeline_hook.py   # HevoPipelineHook (async-first with sync wrappers)
-├── operators/
+│   ├── base.py                   # BaseHevoHook (foundation)
+│   ├── hevo_pipeline_hook.py     # HevoPipelineHook (async-first with sync wrappers)
+│   └── hevo_object_hook.py       # HevoObjectHook (pipeline object operations)
+├── models/
 │   ├── __init__.py
-│   └── hevo_operator.py        # HevoOperator
-├── sensors/
-│   ├── __init__.py
-│   └── hevo_sensor.py          # HevoSensor
-└── triggers/
-    ├── __init__.py
-    └── hevo_trigger.py         # HevoTrigger
+│   ├── common.py                 # Common enums (FieldStatusEnum)
+│   ├── job.py                    # Job models (JobType, JobStatus, Job)
+│   ├── object.py                 # Object models (Object, Field, Namespace)
+│   └── pipeline.py               # Pipeline models (PipelineAction, PipelineStatus, Pipeline)
+├── operators.py                  # HevoPipelineOperator
+├── sensor.py                     # HevoSensor
+└── trigger.py                    # HevoTrigger
 
-dags/                           # Example DAGs for testing
-bin/                            # Setup and utility scripts
-requirements/                   # Additional requirements
+dag_examples/                     # Example DAGs for testing
+├── triggerer_example_dag.py      # Deferrable operator example
+├── sync_sensor_wait_example_dag.py    # Operator + Sensor pattern
+├── sync_synchronous_wait_example_dag.py  # Synchronous wait example
+├── sync_no_wait_example_dag.py   # Fire-and-forget example
+├── resync_example_dag.py         # RESYNC action example
+└── dbt_example_dag.py            # DBT integration example
+
+bin/                              # Setup and utility scripts
+├── add-git-precommit-hook.sh     # Install pre-commit hooks
+└── setup-uv.sh                   # UV package manager setup
+
+tests/                            # Test suite
+├── hooks/                        # Hook tests
+├── operators/                    # Operator tests
+├── sensors/                      # Sensor tests
+├── triggers/                     # Trigger tests
+└── models/                       # Model tests
+
+docker/                           # Docker setup for local testing
 ```
 
 ## Key Dependencies
@@ -560,11 +643,12 @@ requirements/                   # Additional requirements
 
 ### Pipeline State Validation
 
-Always validate pipeline is in `INITIALIZED` state before triggering sync:
+Always validate pipeline is in `INITIALIZED` state before triggering SYNC_NOW:
 
 ```python
-hook.validate_pipeline(pipeline_id, sync_type)
+hook.validate_pipeline(pipeline_id)
 # Raises AirflowException if not INITIALIZED
+# Note: RESYNC action does not require validation
 ```
 
 ### Job Type Consistency

@@ -1,23 +1,23 @@
 """
-Example DAG demonstrating HevoOperator with wait_for_completion=False and HevoSensor.
+Example DAG demonstrating HevoOperator with wait_for_completion=True and deferrable=True.
 
 This DAG:
 1. Loads sample data into a MySQL table
-2. Triggers HevoOperator without waiting for completion (returns job_id)
-3. Uses HevoSensor to wait for the job to complete
-4. Fetches and logs the latest entry from the warehouse
+2. Triggers HevoOperator while waiting for completion using deferrable mode
+3. Fetches and logs the latest entry from the MySQL table
 """
+
+import json
 
 from datetime import datetime, timedelta
 from typing import Any
 
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 
-from airflow.hevo.operators.hevo_operator import HevoOperator
-from airflow.hevo.sensors.hevo_sensor import HevoSensor
+from airflow import DAG
+from airflow.hevo.operators import HevoPipelineOperator
 
 # Default arguments for the DAG
 default_args = {
@@ -29,24 +29,21 @@ default_args = {
 
 # DAG definition
 dag = DAG(
-    "hevo_trigger_sync_with_sensor_wait_example",
+    "hevo_wait_sync_table_operator_example",
     default_args=default_args,
-    description="Example DAG using HevoOperator with wait_for_completion=False and HevoSensor",
+    description="Example DAG using HevoOperator with wait_for_completion=True and deferrable=True",
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags={"hevo", "example", "sensor", "no_wait_operator"},
+    tags={"hevo", "example", "triggerer"},
 )
 
 
 def load_data_to_mysql(**context: Any) -> None:
     """
-    Load sample data into the MySQL table.
-    
+    Load sample data into the MySQL triggerer_example_table table.
+
     This function generates sample data and inserts it into the table.
     """
-    import json
-    from datetime import datetime
-
     mysql_hook = MySqlHook(mysql_conn_id="mysql_default")
 
     # Generate batch_id from DAG run
@@ -56,14 +53,14 @@ def load_data_to_mysql(**context: Any) -> None:
     sample_data = [
         {
             "batch_id": batch_id,
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_at": datetime.now().strftime("%Y_%m_%d %H:%M:%S"),
             "value_int": 100,
             "value_text": "Sample text entry",
             "payload": json.dumps({"key": "value", "number": 42}),
         },
         {
             "batch_id": batch_id,
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_at": datetime.now().strftime("%Y_%m_%d %H:%M:%S"),
             "value_int": 200,
             "value_text": "Another sample entry",
             "payload": json.dumps({"key": "value2", "number": 84}),
@@ -73,29 +70,25 @@ def load_data_to_mysql(**context: Any) -> None:
     # Insert data
     for record in sample_data:
         insert_query = """
-        INSERT INTO sensor_wait_example_table (batch_id, generated_at, value_int, value_text, payload)
+        INSERT INTO wait_sync_table_operator (batch_id, generated_at, value_int, value_text, payload)
         VALUES (%(batch_id)s, %(generated_at)s, %(value_int)s, %(value_text)s, %(payload)s)
         """
         mysql_hook.run(insert_query, parameters=record)
 
-    print(f"Successfully loaded {len(sample_data)} records with batch_id: {batch_id}")
     return batch_id
 
 
 def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
-    """
-    Fetch the latest entry for the current batch_id from Snowflake and log it.
-    """
+    """Fetch the latest entry for the current batch_id from Snowflake and log it."""
     batch_id = context["ti"].xcom_pull(task_ids="load_data_to_mysql")
     if not batch_id:
-        print("batch_id not found in XCom; skipping Snowflake fetch")
         return
 
     snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default_latest", warehouse="HOGWARTS", database="RON")
 
     query = """
     SELECT id, batch_id, generated_at, value_int, value_text, payload
-    FROM NO_WAIT_AIRFLOW_X_HEVO.sensor_wait_example_table
+    FROM NO_WAIT_AIRFLOW_X_HEVO.wait_sync_table_operator
     WHERE batch_id = %s
     ORDER BY id DESC
     LIMIT 1;
@@ -112,14 +105,10 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
             "value_text": result[4],
             "payload": result[5],
         }
-        print("=" * 50)
-        print(f"Latest Snowflake entry for batch_id={batch_id}:")
-        print("=" * 50)
-        for key, value in latest_entry.items():
-            print(f"{key}: {value}")
-        print("=" * 50)
+        for _key, _value in latest_entry.items():
+            pass
     else:
-        print(f"No Snowflake entries found for batch_id={batch_id}")
+        pass
 
 
 # Task 1: Load data to MySQL
@@ -129,35 +118,22 @@ load_data_task = PythonOperator(
     dag=dag,
 )
 
-# Task 2: Trigger HevoOperator without waiting for completion
-# This will return the job_id via XCom
-trigger_hevo_task = HevoOperator(
+# Task 2: Trigger HevoOperator waiting for completion in deferrable mode
+trigger_hevo_task = HevoPipelineOperator(
     task_id="trigger_hevo_sync",
-    pipeline_id="{{ var.value.pipeline_id }}",  # Update with your pipeline ID
+    pipeline_id="{{ var.value.pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
-    wait_for_completion=False,  # Key parameter: don't wait for completion, returns job_id
-    deferrable=False,
+    wait_for_completion=True,  # wait for completion
+    deferrable=False,  # run in synchronous mode
     dag=dag,
 )
 
-# Task 3: Use HevoSensor to wait for the job to complete
-# The sensor uses the job_id from the operator via XCom templating
-wait_for_job_sensor = HevoSensor(
-    task_id="wait_for_job_completion",
-    pipeline_id="{{ var.value.pipeline_id }}",  # Update with your pipeline ID
-    connection_id="hevo_airflow_conn_id",
-    job_id="{{ ti.xcom_pull(task_ids='trigger_hevo_sync') }}",  # Get job_id from operator via XCom
-    deferrable=True,  # Use deferrable mode for async execution
-    poke_interval=5,
-    accept_completed_with_failures=False,
-    dag=dag,
-)
-
-# Task 4: Fetch and log the latest entry from warehouse
+# Task 3: Fetch and log the latest entry
 fetch_latest_data_from_warehouse = PythonOperator(
     task_id="fetch_and_log_latest_entry",
     python_callable=fetch_and_log_latest_entry_from_warehouse,
     dag=dag,
 )
 
-load_data_task >> trigger_hevo_task >> wait_for_job_sensor >> fetch_latest_data_from_warehouse
+# Define task dependencies
+load_data_task >> trigger_hevo_task >> fetch_latest_data_from_warehouse

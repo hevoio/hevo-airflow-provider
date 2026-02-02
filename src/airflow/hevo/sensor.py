@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import cached_property
 from time import sleep
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from airflow.exceptions import AirflowException
 from airflow.sensors.base import BaseSensorOperator
@@ -10,9 +10,9 @@ from airflow.sensors.base import BaseSensorOperator
 if TYPE_CHECKING:
     from airflow.utils.context import Context
 
-from airflow.hevo.hooks.hevo_pipeline_hook import HevoPipelineHook
+from airflow.hevo.hooks import HevoPipelineHook
 from airflow.hevo.models.job import JobCompletionStatus, JobType
-from airflow.hevo.triggers.hevo_trigger import HevoTrigger
+from airflow.hevo.trigger import HevoTrigger
 
 
 class HevoSensor(BaseSensorOperator):
@@ -63,18 +63,18 @@ class HevoSensor(BaseSensorOperator):
     template_fields = ("pipeline_id", "job_id")
 
     def __init__(
-            self,
-            pipeline_id: int,
-            job_id: Optional[str] = None,
-            job_type: JobType = JobType.INCREMENTAL,
-            connection_id: Optional[str] = None,
-            poke_interval: int = 5,
-            accept_completed_with_failures: bool = False,
-            deferrable: bool = True,
-            wait_for_job_max_attempts: int = 10,
-            wait_for_job_interval: int = 5,
-            wait_for_job_initial_delay: int = 10,
-            **kwargs: Any,
+        self,
+        pipeline_id: int,
+        connection_id: str,
+        job_id: str | None = None,
+        job_type: JobType = JobType.INCREMENTAL,
+        poke_interval: int = 5,
+        accept_completed_with_failures: bool = False,
+        deferrable: bool = True,
+        wait_for_job_max_attempts: int = 10,
+        wait_for_job_interval: int = 5,
+        wait_for_job_initial_delay: int = 10,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.pipeline_id = pipeline_id
@@ -116,7 +116,7 @@ class HevoSensor(BaseSensorOperator):
                 method_name="execute_complete",
             )
 
-    def _get_job_id(self) -> Optional[str]:
+    def _get_job_id(self) -> str | None:
         """
         Get the job_id via explicit parameter or auto-discovery.
 
@@ -138,7 +138,7 @@ class HevoSensor(BaseSensorOperator):
             self.log.debug("Using provided job_id: %s", self.job_id)
             return self.job_id
 
-        self.log.info("Job ID not provided, discovering active job (with_wait=%s)", with_wait)
+        self.log.info("Job ID not provided, discovering active job")
         hook = self.hook
 
         wait_for_job = 0
@@ -147,30 +147,27 @@ class HevoSensor(BaseSensorOperator):
 
         while wait_for_job < max_attempts:
             try:
-                active_job = hook.find_active_job_by_type(self.pipeline_id, self.job_type)
+                active_job = hook.find_active_job_by_type_sync(self.pipeline_id, self.job_type)
                 if active_job is not None:
                     self.log.info("Found active job on attempt %s", wait_for_job + 1)
                     break
             except AirflowException as e:
                 # No active job found yet, continue waiting
                 self.log.debug("No active job found on attempt %s: %s", wait_for_job + 1, e)
-                pass
 
             if wait_for_job < max_attempts - 1:
                 sleep(self.wait_for_job_interval)
             wait_for_job += 1
 
         if active_job is None:
-            job_type_str = self.job_type.value if hasattr(self.job_type, 'value') else str(self.job_type)
-            self.log.error("No active %s job found for pipeline %s after %s attempts", job_type_str,
-                           self.pipeline_id, max_attempts)
-            raise AirflowException(
-                f"No active {job_type_str} job found for pipeline {self.pipeline_id}"
+            job_type_str = self.job_type.value if hasattr(self.job_type, "value") else str(self.job_type)
+            self.log.error(
+                "No active %s job found for pipeline %s after %s attempts", job_type_str, self.pipeline_id, max_attempts
             )
+            raise AirflowException(f"No active {job_type_str} job found for pipeline {self.pipeline_id}")
 
         # Job model always has job_id (required field)
-        job_id = active_job.job_id
-        return job_id
+        return active_job.job_id
 
     def poke(self, context: Context) -> bool:
         """
@@ -207,7 +204,7 @@ class HevoSensor(BaseSensorOperator):
             return False
 
         # Check job status
-        status = hook.get_job_completion_status(
+        status = hook.get_job_completion_status_sync(
             self.pipeline_id,
             job_id,
             self.accept_completed_with_failures,
@@ -216,15 +213,14 @@ class HevoSensor(BaseSensorOperator):
         if status == JobCompletionStatus.COMPLETED:
             self.log.info("Job %s completed successfully", job_id)
             return True
-        elif status == JobCompletionStatus.COMPLETED_WITH_FAILURES and self.accept_completed_with_failures:
+        if status == JobCompletionStatus.COMPLETED_WITH_FAILURES and self.accept_completed_with_failures:
             self.log.warning("Job %s completed with failures (accepting as success)", job_id)
             return True
-        elif status in [JobCompletionStatus.FAILED, JobCompletionStatus.COMPLETED_WITH_FAILURES]:
+        if status in [JobCompletionStatus.FAILED, JobCompletionStatus.COMPLETED_WITH_FAILURES]:
             self.log.error("Job %s failed with status: %s", job_id, status.value)
             raise AirflowException(f"Job {job_id} failed for pipeline {self.pipeline_id}")
-        else:
-            # Status is JobCompletionStatus.PENDING
-            return False
+        # Status is JobCompletionStatus.PENDING
+        return False
 
     def execute_complete(self, context: Context, event: dict[Any, Any] | None = None) -> None:
         """
@@ -248,7 +244,7 @@ class HevoSensor(BaseSensorOperator):
             message = event.get("message", "Unknown")
             self.log.info("Trigger event status: %s, job_id: %s", status, job_id)
             if status == "error":
-                msg = "{0}: {1}".format(status, message)
+                msg = f"{status}: {message}"
                 raise AirflowException(msg)
             if status == "success":
                 self.log.info("Job %s completed successfully: %s", job_id, message)
@@ -268,6 +264,5 @@ class HevoSensor(BaseSensorOperator):
         :returns: Configured HevoPipelineHook with pipeline_id and connection_id.
         """
         return HevoPipelineHook(
-            pipeline_id=self.pipeline_id,
             connection_id=self.connection_id,
         )

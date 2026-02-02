@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from functools import cached_property
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from airflow.exceptions import AirflowException
 from airflow.triggers.base import BaseTrigger, TriggerEvent
 
-from airflow.hevo.hooks.hevo_pipeline_hook import HevoPipelineHook
-from airflow.hevo.models.job import JobType, JobCompletionStatus
+from airflow.hevo.hooks import HevoPipelineHook
+from airflow.hevo.models.job import JobCompletionStatus, JobType
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class HevoTrigger(BaseTrigger):
@@ -39,13 +41,13 @@ class HevoTrigger(BaseTrigger):
     """
 
     def __init__(
-            self,
-            pipeline_id: int,
-            job_id: str | None = None,
-            job_type: JobType = JobType.INCREMENTAL,
-            poke_interval: int = 5,
-            accept_completed_with_failures: bool = False,
-            connection_id: str | None = None
+        self,
+        pipeline_id: int,
+        connection_id: str,
+        job_id: str | None = None,
+        job_type: JobType = JobType.INCREMENTAL,
+        poke_interval: int = 5,
+        accept_completed_with_failures: bool = False,
     ) -> None:
         super().__init__()
         self.pipeline_id = pipeline_id
@@ -65,14 +67,14 @@ class HevoTrigger(BaseTrigger):
         :returns: Tuple of (fully qualified class path, parameter dictionary).
         """
         return (
-            "airflow.hevo.triggers.HevoTrigger",
+            "airflow.hevo.trigger.HevoTrigger",
             {
                 "pipeline_id": self.pipeline_id,
                 "job_id": self.job_id,
-                "job_type": self.job_type,
+                "job_type": self.job_type.value if isinstance(self.job_type, JobType) else self.job_type,
                 "poke_interval": self.poke_interval,
                 "accept_completed_with_failures": self.accept_completed_with_failures,
-                "connection_id": self.connection_id
+                "connection_id": self.connection_id,
             },
         )
 
@@ -109,9 +111,7 @@ class HevoTrigger(BaseTrigger):
 
             # Discover job ID if not provided
             if self.job_id is None:
-                active_job = await hook.find_active_job_by_type_async(
-                    self.pipeline_id, self.job_type
-                )
+                active_job = await hook.find_active_job_by_type_async(self.pipeline_id, self.job_type)
                 # find_active_job_by_type_async raises exception if no job found
                 self.job_id = active_job.job_id
             else:
@@ -142,11 +142,10 @@ class HevoTrigger(BaseTrigger):
                     return
 
                 if status == JobCompletionStatus.COMPLETED_WITH_FAILURES:
-                    message = (
-                        f"Pipeline {self.pipeline_id} completed with failures under job {self.job_id}"
+                    message = f"Pipeline {self.pipeline_id} completed with failures under job {self.job_id}"
+                    self.log.warning(
+                        "Job %s completed with failures after %s polls (accepting as success)", self.job_id, poll_count
                     )
-                    self.log.warning("Job %s completed with failures after %s polls (accepting as success)",
-                                     self.job_id, poll_count)
                     yield TriggerEvent(
                         {
                             "status": "success",
@@ -192,9 +191,7 @@ class HevoTrigger(BaseTrigger):
             )
             return
         except Exception as exc:
-            error_message = (
-                f"Unexpected error while monitoring pipeline {self.pipeline_id}: {exc}"
-            )
+            error_message = f"Unexpected error while monitoring pipeline {self.pipeline_id}: {exc}"
             yield TriggerEvent(
                 {
                     "status": "error",
@@ -216,6 +213,5 @@ class HevoTrigger(BaseTrigger):
         :returns: Configured HevoPipelineHook with pipeline_id and connection_id.
         """
         return HevoPipelineHook(
-            pipeline_id=self.pipeline_id,
             connection_id=self.connection_id,
         )

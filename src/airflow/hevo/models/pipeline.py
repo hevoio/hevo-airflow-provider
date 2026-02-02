@@ -2,23 +2,35 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import logging
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field, field_validator
 
 from airflow.hevo.models.common import BaseResponse
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineStatus(str, Enum):
     """Pipeline status values."""
 
+    INITIALIZING = "INITIALIZING"
     INITIALIZED = "INITIALIZED"
-    PAUSED = "PAUSED"
-    STOPPED = "STOPPED"
-    FAILED = "FAILED"
-    INCOMPLETE = "INCOMPLETE"
+    INITIALIZE_FAILED = "INITIALIZE_FAILED"
+    DISABLING = "DISABLING"
+    DISABLED = "DISABLED"
+    DISABLE_FAILED = "DISABLE_FAILED"
+    ENABLING = "ENABLING"
+    ENABLED = "ENABLED"
+    ENABLE_FAILED = "ENABLE_FAILED"
+    DELETING = "DELETING"
+    DELETED = "DELETED"
+    DELETE_FAILED = "DELETE_FAILED"
+    RESTARTING = "RESTARTING"
+    RESTART_FAILED = "RESTART_FAILED"
+    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class SyncType(str, Enum):
@@ -34,29 +46,108 @@ class SyncType(str, Enum):
     SCHEDULED = "SCHEDULED"
 
 
-class PipelineSource(BaseResponse):
+class PipelineAction(str, Enum):
+    """
+    Pipeline action types.
+
+    Defines which API action to trigger:
+    - SYNC_NOW: Trigger a regular sync (POST /pipelines/{id}/actions/sync-now)
+    - RESYNC: Trigger a full historical resync (POST /pipelines/{id}/actions/resync)
+    """
+
+    SYNC_NOW = "SYNC_NOW"
+    RESYNC = "RESYNC"
+
+
+class ReplicationType(str, Enum):
+    """
+    Pipeline replication type values.
+
+    Defines what data is replicated:
+    - HISTORICAL_AND_INCREMENTAL: Full historical load followed by incremental updates
+    - INCREMENTAL_ONLY: Only incremental updates (no historical load)
+    """
+
+    HISTORICAL_AND_INCREMENTAL = "HISTORICAL_AND_INCREMENTAL"
+    INCREMENTAL_ONLY = "INCREMENTAL_ONLY"
+    UNKNOWN = "UNKNOWN"  # Fallback for new replication types
+
+
+class LoadMode(str, Enum):
+    """
+    Pipeline load mode values.
+
+    Determines how data is loaded into the destination:
+    - APPEND: Adds new records without modifying existing ones
+    - MERGE: Updates existing records based on primary keys and adds new ones
+    """
+
+    APPEND = "APPEND"
+    MERGE = "MERGE"
+    UNKNOWN = "UNKNOWN"  # Fallback for new load modes
+
+
+class SchemaEvolution(str, Enum):
+    """
+    Schema evolution handling strategy.
+
+    Controls how schema changes in the source are handled:
+    - ALLOW_ALL: All schema changes are automatically propagated
+    - BLOCK_ALL: All schema changes are blocked
+    - ALLOW_COLUMN_LEVEL: Column-level changes are allowed
+    """
+
+    ALLOW_ALL = "ALLOW_ALL"
+    BLOCK_ALL = "BLOCK_ALL"
+    ALLOW_COLUMN_LEVEL = "ALLOW_COLUMN_LEVEL"
+    UNKNOWN = "UNKNOWN"  # Fallback for new schema evolution strategies
+
+
+class Source(BaseResponse):
     """Pipeline source configuration."""
 
-    source_id: Optional[str] = Field(None, description="Source connector ID")
-    source_name: Optional[str] = Field(None, description="Source name")
-    source_type: Optional[str] = Field(None, description="Type of source connector")
-    connection_params: Optional[dict[str, Any]] = Field(None, description="Source connection parameters")
+    name: str = Field(..., description="Source name")
+    connector_id: str = Field(..., description="Source connector ID")
+    source_type: str = Field(..., description="Type of source connector")
+    config: dict[str, Any] | None = Field(None, description="Source connection configuration")
 
 
-class PipelineDestination(BaseResponse):
+class Destination(BaseResponse):
     """Pipeline destination configuration."""
 
-    destination_id: Optional[str] = Field(None, description="Destination ID")
-    destination_name: Optional[str] = Field(None, description="Destination name")
-    destination_type: Optional[str] = Field(None, description="Type of destination")
+    id: int = Field(..., description="Destination ID")
+    name: str = Field(..., description="Destination name")
+    connector_id: str = Field(..., description="Destination connector ID")
+    destination_type: str = Field(..., description="Type of destination")
+    status: str | None = Field(None, description="Destination status")
 
 
-class PipelineConfig(BaseResponse):
-    """Pipeline configuration details."""
+class Schedule(BaseResponse):
+    """Pipeline schedule configuration."""
 
-    sync_type: Optional[SyncType] = Field(None, description="Sync type (ON_DEMAND or SCHEDULED)")
-    schedule: Optional[dict[str, Any]] = Field(None, description="Schedule configuration for scheduled syncs")
-    objects: Optional[list[dict[str, Any]]] = Field(None, description="List of objects being synced")
+    sync_type: SyncType = Field(..., description="Sync type (ON_DEMAND or SCHEDULED)")
+    frequency_minutes: int | None = Field(None, description="Sync frequency in minutes (only for SCHEDULED)")
+
+
+class FailureHandlingPolicy(BaseResponse):
+    """Pipeline failure handling policy configuration."""
+
+    object_failure_level: str = Field(..., description="Failure level threshold for objects")
+    object_failure_threshold: int = Field(..., description="Number of object failures before taking action")
+
+
+class LatencyAlert(BaseResponse):
+    """Pipeline latency alert configuration."""
+
+    enabled: bool = Field(..., description="Whether latency alerts are enabled")
+    threshold_minutes: int | None = Field(None, description="Latency threshold in minutes")
+
+
+class SourceSchemaStatus(BaseResponse):
+    """Source schema refresh status."""
+
+    status: str = Field(..., description="Schema refresh status")
+    refreshed_ts: int | None = Field(None, description="Last schema refresh timestamp in milliseconds")
 
 
 class Pipeline(BaseResponse):
@@ -66,23 +157,130 @@ class Pipeline(BaseResponse):
     Returned by:
     - GET /api/v1/pipelines/{id}
     - GET /api/v1/pipelines (list endpoint)
+
+    All timestamp fields (created_ts, updated_ts) are in milliseconds since epoch.
     """
 
     id: int = Field(..., description="Unique pipeline identifier")
     name: str = Field(..., description="Pipeline name")
-    status: PipelineStatus = Field(..., description="Current pipeline status")
-    source: Optional[PipelineSource] = Field(None, description="Source configuration")
-    destination: Optional[PipelineDestination] = Field(None, description="Destination configuration")
-    config: Optional[PipelineConfig] = Field(None, description="Pipeline configuration")
-    created_at: Optional[datetime] = Field(None, description="Pipeline creation timestamp")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
-    last_synced_at: Optional[datetime] = Field(None, description="Last successful sync timestamp")
+    status: PipelineStatus | str = Field(..., description="Current pipeline status")
+    source: Source = Field(..., description="Source configuration")
+    destination: Destination = Field(..., description="Destination configuration")
+    destination_prefix: str = Field(..., description="Prefix used for destination table names")
+    replication_type: ReplicationType | str = Field(..., description="Type of data replicated")
+    load_mode: LoadMode | str = Field(..., description="How data is loaded (APPEND or MERGE)")
+    schema_evolution: SchemaEvolution | str = Field(..., description="Schema change handling strategy")
+    schedule: Schedule = Field(..., description="Synchronization timing configuration")
+    failure_handling_policy: FailureHandlingPolicy = Field(..., description="Failure handling settings")
+    source_schema_status: SourceSchemaStatus = Field(..., description="Schema refresh details")
+    created_by_email: str = Field(..., description="Email of user who created the pipeline")
+    updated_by_email: str = Field(..., description="Email of user who last updated the pipeline")
+    created_ts: int = Field(..., description="Pipeline creation timestamp in milliseconds since epoch")
+    updated_ts: int = Field(..., description="Last update timestamp in milliseconds since epoch")
+
+    # Optional fields that may not always be present
+    latency_alert: LatencyAlert | None = Field(None, description="Latency alert configuration")
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, value: Any) -> PipelineStatus:
+        """
+        Validate and normalize pipeline status values.
+
+        If the API returns a new status that doesn't exist in our enum,
+        log a warning and return PipelineStatus.UNKNOWN to prevent breaking.
+        """
+        if isinstance(value, PipelineStatus):
+            return value
+
+        # Try to match string value to known enum
+        try:
+            return PipelineStatus(str(value))
+        except ValueError:
+            logger.warning(
+                "Unknown pipeline status '%s' received from API. Please update PipelineStatus enum. "
+                "Defaulting to PipelineStatus.UNKNOWN",
+                value,
+            )
+            return PipelineStatus.UNKNOWN
+
+    @field_validator("replication_type", mode="before")
+    @classmethod
+    def validate_replication_type(cls, value: Any) -> ReplicationType:
+        """
+        Validate and normalize replication type values.
+
+        If the API returns a new replication type that doesn't exist in our enum,
+        log a warning and return ReplicationType.UNKNOWN to prevent breaking.
+        """
+        if isinstance(value, ReplicationType):
+            return value
+
+        # Try to match string value to known enum
+        try:
+            return ReplicationType(str(value))
+        except ValueError:
+            logger.warning(
+                "Unknown replication type '%s' received from API. Please update ReplicationType enum. "
+                "Defaulting to ReplicationType.UNKNOWN",
+                value,
+            )
+            return ReplicationType.UNKNOWN
+
+    @field_validator("load_mode", mode="before")
+    @classmethod
+    def validate_load_mode(cls, value: Any) -> LoadMode:
+        """
+        Validate and normalize load mode values.
+
+        If the API returns a new load mode that doesn't exist in our enum,
+        log a warning and return LoadMode.UNKNOWN to prevent breaking.
+        """
+        if isinstance(value, LoadMode):
+            return value
+
+        # Try to match string value to known enum
+        try:
+            return LoadMode(str(value))
+        except ValueError:
+            logger.warning(
+                "Unknown load mode '%s' received from API. Please update LoadMode enum. Defaulting to LoadMode.UNKNOWN",
+                value,
+            )
+            return LoadMode.UNKNOWN
+
+    @field_validator("schema_evolution", mode="before")
+    @classmethod
+    def validate_schema_evolution(cls, value: Any) -> SchemaEvolution:
+        """
+        Validate and normalize schema evolution values.
+
+        If the API returns a new schema evolution strategy that doesn't exist in our enum,
+        log a warning and return SchemaEvolution.UNKNOWN to prevent breaking.
+        """
+        if isinstance(value, SchemaEvolution):
+            return value
+
+        # Try to match string value to known enum
+        try:
+            return SchemaEvolution(str(value))
+        except ValueError:
+            logger.warning(
+                "Unknown schema evolution '%s' received from API. Please update SchemaEvolution enum. "
+                "Defaulting to SchemaEvolution.UNKNOWN",
+                value,
+            )
+            return SchemaEvolution.UNKNOWN
 
 
 class PaginatedPipelinesResponse(BaseResponse):
-    """Paginated response for listing pipelines."""
+    """
+    Paginated response for listing pipelines.
+
+    Returned by GET /api/v1/pipelines
+    Uses cursor-based pagination.
+    """
 
     data: list[Pipeline] = Field(..., description="List of pipelines")
     has_more: bool = Field(..., description="Whether more results are available")
-    next_cursor: Optional[str] = Field(None, description="Cursor for the next page")
-    count: Optional[int] = Field(None, description="Total count of pipelines")
+    next_cursor: str | None = Field(None, description="Cursor for the next page")

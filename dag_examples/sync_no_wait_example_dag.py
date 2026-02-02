@@ -7,15 +7,16 @@ This DAG:
 3. Fetches and logs the latest entry from the MySQL table
 """
 
+import json
+
 from datetime import datetime, timedelta
 from typing import Any
 
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 
-from airflow.hevo.operators.hevo_operator import HevoOperator
-
+from airflow import DAG
+from airflow.hevo.operators import HevoPipelineOperator
 
 # Default arguments for the DAG
 default_args = {
@@ -39,17 +40,15 @@ dag = DAG(
 def load_data_to_mysql(**context: Any) -> None:
     """
     Load sample data into the MySQL no_wait_sync_trigger table.
-    
+
     This function generates sample data and inserts it into the table.
     """
-    import json
-    from datetime import datetime
-    
+
     mysql_hook = MySqlHook(mysql_conn_id="mysql_default")
 
     # Generate batch_id from DAG run
     batch_id = f"batch_{context['dag_run'].run_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
+
     # Sample data to insert
     sample_data = [
         {
@@ -67,7 +66,7 @@ def load_data_to_mysql(**context: Any) -> None:
             "payload": json.dumps({"key": "value2", "number": 84}),
         },
     ]
-    
+
     # Insert data
     for record in sample_data:
         insert_query = """
@@ -75,11 +74,8 @@ def load_data_to_mysql(**context: Any) -> None:
         VALUES (%(batch_id)s, %(generated_at)s, %(value_int)s, %(value_text)s, %(payload)s)
         """
         mysql_hook.run(insert_query, parameters=record)
-    
-    print(f"Successfully loaded {len(sample_data)} records with batch_id: {batch_id}")
+
     return batch_id
-
-
 
 
 # Task 1: Load data to MySQL
@@ -90,7 +86,7 @@ load_data_task = PythonOperator(
 )
 
 # Task 2: Trigger HevoOperator without waiting for completion (returns job_id)
-trigger_hevo_task = HevoOperator(
+trigger_hevo_task = HevoPipelineOperator(
     task_id="trigger_hevo_sync",
     pipeline_id="{{ var.value.pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
@@ -101,4 +97,3 @@ trigger_hevo_task = HevoOperator(
 
 # Define task dependencies
 load_data_task >> trigger_hevo_task
-

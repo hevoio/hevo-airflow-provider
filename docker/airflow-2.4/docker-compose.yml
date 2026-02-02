@@ -11,14 +11,14 @@ services:
     environment:
       - AIRFLOW_HOME=/opt/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dag_examples
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
       - PYTHONFAULTHANDLER=true
     volumes:
       # Mount DAGs directory for live updates during development
-      - ../../dags:/opt/airflow/dags
+      - ../../dag_examples:/opt/airflow/dag_examples
       # Mount logs for debugging
       - ./logs:/opt/airflow/logs
       # Persist Airflow database

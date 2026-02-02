@@ -7,27 +7,35 @@ from typing import TYPE_CHECKING, Any
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 
-from airflow.hevo.hooks.hevo_pipeline_hook import HevoPipelineHook
+from airflow.hevo.hooks import HevoPipelineHook
 from airflow.hevo.models.job import JobCompletionStatus, JobType
-from airflow.hevo.models.pipeline import SyncType
-from airflow.hevo.triggers.hevo_trigger import HevoTrigger
+from airflow.hevo.models.pipeline import PipelineAction
+from airflow.hevo.trigger import HevoTrigger
 
 if TYPE_CHECKING:
     from airflow.utils.context import Context
 
 
-class HevoOperator(BaseOperator):
+class HevoPipelineOperator(BaseOperator):
     """
-    Operator to trigger and optionally wait for Hevo pipeline syncs.
+    Operator to trigger and optionally wait for Hevo pipeline syncs or resyncs.
+
+    Supports two pipeline actions:
+    1. SYNC_NOW: Trigger a regular sync (POST /pipelines/{id}/actions/sync-now)
+    2. RESYNC: Trigger a full historical resync (POST /pipelines/{id}/actions/resync)
 
     Supports three execution modes:
     1. Fire-and-forget: ``wait_for_completion=False`` - Returns job_id
     2. Synchronous wait: ``deferrable=False, wait_for_completion=True`` - Blocks worker
     3. Deferrable wait: ``deferrable=True, wait_for_completion=True`` - Releases worker (recommended)
 
-    :param pipeline_id: The Hevo pipeline ID to sync (must be in INITIALIZED state).
-    :param sync_type: Type of sync (default: SyncType.ON_DEMAND).
-    :param job_type: Type of job to wait for (default: JobType.INCREMENTAL).
+    :param pipeline_id: The Hevo pipeline ID to sync or resync.
+    :param action: Pipeline action to trigger (default: PipelineAction.SYNC_NOW).
+                  - SYNC_NOW: Regular sync (requires pipeline in INITIALIZED state)
+                  - RESYNC: Full historical resync (re-ingests all data from source)
+    :param job_type: Type of job to wait for. Defaults intelligently based on action:
+                    - SYNC_NOW: JobType.INCREMENTAL (default)
+                    - RESYNC: JobType.TRUNCATE_AND_LOAD (default)
                     Used when discovering the active job after triggering.
     :param connection_id: Airflow connection ID for Hevo API credentials (default: None uses default connection).
     :param poll_interval: Seconds between status checks when waiting (default: 5).
@@ -41,65 +49,90 @@ class HevoOperator(BaseOperator):
     :param ensure_new_job: If True, fails if a job is already in progress for the pipeline (default: True).
                           If False, proceeds normally even if a job already exists.
                           Useful to prevent triggering duplicate jobs when previous jobs are still running.
+                          Only applies to SYNC_NOW action.
+    :param drop_and_load: If True, drops existing destination tables before loading (default: False).
+                         Only applies to RESYNC action. When enabled, destination tables are dropped
+                         and recreated, ensuring a clean slate for the historical data reload.
     """
 
     template_fields = ("pipeline_id",)
 
-    def __init__(
-            self,
-            pipeline_id: int = None,
-            sync_type: SyncType = SyncType.ON_DEMAND,
-            job_type: JobType = JobType.INCREMENTAL,
-            connection_id: str = None,
-            poll_interval: int = 5,
-            retry_limit: int = 10,
-            deferrable: bool = True,
-            wait_for_completion: bool = True,
-            accept_completed_with_failures: bool = False,
-            ensure_new_job: bool = True,
-            **kwargs) -> None:
+    def __init__(  # noqa: PLR0913
+        self,
+        pipeline_id: int,
+        connection_id: str | None = None,
+        action: PipelineAction = PipelineAction.SYNC_NOW,
+        job_type: JobType | None = None,
+        poll_interval: int = 5,
+        retry_limit: int = 10,
+        deferrable: bool = True,
+        wait_for_completion: bool = True,
+        accept_completed_with_failures: bool = False,
+        ensure_new_job: bool = True,
+        drop_and_load: bool = False,
+        **kwargs,
+    ) -> None:
         self.pipeline_id = pipeline_id
+        self.action = action
         self.poll_interval = poll_interval
-        self.sync_type = sync_type
         self.connection_id = connection_id
-        self.job_type = job_type
+        if job_type is None:
+            self.job_type = JobType.TRUNCATE_AND_LOAD if action == PipelineAction.RESYNC else JobType.INCREMENTAL
+        else:
+            self.job_type = job_type
         self.deferrable = deferrable
         self.retry_limit = retry_limit
         self.wait_for_completion = wait_for_completion
         self.accept_completed_with_failures = accept_completed_with_failures
         self.ensure_new_job = ensure_new_job
+        self.drop_and_load = drop_and_load
         super().__init__(**kwargs)
 
-    def execute(self, context: Context) -> None | str:
+    def execute(self, context: Context) -> None | str:  # noqa: ARG002
         """
-        Execute the pipeline sync operation.
+        Execute the pipeline sync or resync operation.
 
         Execution flow:
-        1. Validates pipeline is in INITIALIZED state
-        2. Triggers sync via API (POST /pipelines/{id}/actions/sync-now)
-        3. Polls up to 10 times (5s intervals) for active job to appear
-        4. Depending on configuration:
+        1. Triggers action based on self.action:
+           - SYNC_NOW: Validates pipeline is in INITIALIZED state, then triggers sync
+             (POST /pipelines/{id}/actions/sync-now)
+           - RESYNC: Triggers full historical resync (POST /pipelines/{id}/actions/resync)
+        2. Polls up to retry_limit times (poll_interval seconds) for active job to appear
+        3. Depending on configuration:
            - wait_for_completion=False: Returns job_id via XCom
            - deferrable=True: Defers to HevoTrigger for async monitoring
            - deferrable=False: Polls synchronously until completion
 
         :param context: Airflow execution context with task instance, DAG info, etc.
         :returns: Job ID string if ``wait_for_completion=False``, otherwise ``None``.
-        :raises AirflowException: If pipeline validation fails, sync trigger fails,
-                                 or no active job is found after 10 attempts.
+        :raises AirflowException: If pipeline validation fails (SYNC_NOW only), action trigger fails,
+                                 or no active job is found after retry_limit attempts.
         """
         hook = self.hook
-        hook.validate_pipeline(self.pipeline_id, self.sync_type)
 
-        hook.trigger_pipeline_sync(self.pipeline_id, self.ensure_new_job)
+        # Trigger the appropriate action
+        if self.action == PipelineAction.SYNC_NOW:
+            hook.validate_pipeline(self.pipeline_id)
+            self.log.info("Triggering sync for pipeline %s", self.pipeline_id)
+            hook.trigger_pipeline_sync(self.pipeline_id, self.ensure_new_job)
+            self.log.info("Sync triggered successfully for pipeline %s", self.pipeline_id)
+        elif self.action == PipelineAction.RESYNC:
+            self.log.info(
+                "Triggering full historical resync for pipeline %s (drop_and_load=%s)",
+                self.pipeline_id,
+                self.drop_and_load,
+            )
+            hook.resync_pipeline_sync(self.pipeline_id, self.drop_and_load)
+            self.log.info("Resync triggered successfully for pipeline %s", self.pipeline_id)
 
-        self.log.info("Waiting for active job for pipeline %s", self.pipeline_id)
+        # Wait for the active job to appear
+        self.log.info("Waiting for active %s job for pipeline %s", self.job_type.value, self.pipeline_id)
         wait_for_job = 0
         active_job = None
 
         while wait_for_job < self.retry_limit:
             try:
-                active_job = hook.find_active_job_by_type(pipeline_id=self.pipeline_id, job_type=self.job_type)
+                active_job = hook.find_active_job_by_type_sync(pipeline_id=self.pipeline_id, job_type=self.job_type)
                 if active_job is not None:
                     self.log.info("Found active job on attempt %s", wait_for_job + 1)
                     break
@@ -112,7 +145,9 @@ class HevoOperator(BaseOperator):
         if active_job is None:
             self.log.error(
                 "No active %s job found for pipeline %s after %s attempts",
-                self.job_type.value, self.pipeline_id, self.retry_limit
+                self.job_type.value,
+                self.pipeline_id,
+                self.retry_limit,
             )
             raise AirflowException(
                 f"No active {self.job_type.value} job found for pipeline {self.pipeline_id} "
@@ -145,7 +180,7 @@ class HevoOperator(BaseOperator):
             self._wait_synchronously(job_id)
         return job_id
 
-    def execute_complete(self, context: Context, event: dict[str, Any] | None = None) -> None:
+    def execute_complete(self, context: Context, event: dict[str, Any] | None = None) -> None:  # noqa: ARG002
         """
         Handle the trigger completion event (deferrable mode callback).
 
@@ -198,13 +233,13 @@ class HevoOperator(BaseOperator):
         self.log.info("Waiting synchronously for job %s to complete", job_id)
 
         while True:
-            is_completed = self.hook.get_job_completion_status(
+            is_completed = self.hook.get_job_completion_status_sync(
                 self.pipeline_id, job_id, self.accept_completed_with_failures
             )
             if is_completed in [JobCompletionStatus.COMPLETED, JobCompletionStatus.COMPLETED_WITH_FAILURES]:
                 self.log.info("Job %s completed successfully (status: %s)", job_id, is_completed.value)
                 return
-            elif is_completed == JobCompletionStatus.PENDING:
+            if is_completed == JobCompletionStatus.PENDING:
                 sleep(self.poll_interval)
             else:
                 self.log.error("Job %s failed with status: %s", job_id, is_completed.value)
@@ -218,9 +253,8 @@ class HevoOperator(BaseOperator):
         Uses cached_property to ensure only one hook instance is created per
         operator execution, improving efficiency.
 
-        :returns: Configured HevoPipelineHook with pipeline_id and connection_id.
+        :returns: Configured HevoPipelineHook with connection_id.
         """
         return HevoPipelineHook(
-            pipeline_id=self.pipeline_id,
             connection_id=self.connection_id,
         )

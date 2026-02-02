@@ -1,8 +1,6 @@
-# Apache Airflow 3.0.x Core Dependencies
-apache-airflow==3.0.6
-apache-airflow-core==3.0.6
+# Apache Airflow 3.0.x is pre-installed in the base image: apache/airflow:3.0.6-python3.12
 
-# Apache Airflow Providers
+# Additional Apache Airflow Providers
 apache-airflow-providers-http==5.3.1
 apache-airflow-providers-mysql==6.3.1
 apache-airflow-providers-apache-spark==4.4.0
@@ -10,8 +8,7 @@ apache-airflow-providers-snowflake==6.7.0
 
 # Hevo Provider Dependencies
 aiohttp==3.13.2
-requests==2.32.5
 
 # Hevo Airflow Provider (local)
 # Will be installed from parent directory during Docker build
-# Using: uv pip install -e /opt/hevo-airflow-provider
+# Using: pip install -e /opt/hevo-airflow-provider
