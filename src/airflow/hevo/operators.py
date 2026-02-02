@@ -37,7 +37,7 @@ class HevoPipelineOperator(BaseOperator):
                     - SYNC_NOW: JobType.INCREMENTAL (default)
                     - RESYNC: JobType.TRUNCATE_AND_LOAD (default)
                     Used when discovering the active job after triggering.
-    :param connection_id: Airflow connection ID for Hevo API credentials (default: None uses default connection).
+    :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
     :param poll_interval: Seconds between status checks when waiting (default: 5).
     :param retry_limit: Maximum HTTP retry attempts for API requests (default: 10).
     :param deferrable: Use deferrable execution to release worker slot while waiting (default: True).
@@ -60,7 +60,7 @@ class HevoPipelineOperator(BaseOperator):
     def __init__(  # noqa: PLR0913
         self,
         pipeline_id: int,
-        connection_id: str | None = None,
+        connection_id: str = "hevo_airflow_conn_id",
         action: PipelineAction = PipelineAction.SYNC_NOW,
         job_type: JobType | None = None,
         poll_interval: int = 5,

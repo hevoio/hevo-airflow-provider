@@ -50,7 +50,7 @@ class HevoSensor(BaseSensorOperator):
     :param job_type: Job type for auto-discovery (default: JobType.INCREMENTAL).
                     Can be JobType enum or string for backwards compatibility.
                     Only used when job_id is not provided.
-    :param connection_id: Airflow connection ID for Hevo API credentials (default: None uses default).
+    :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
     :param poke_interval: Seconds between status checks (default: 5).
     :param accept_completed_with_failures: Treat COMPLETED_WITH_FAILURES as success (default: False).
     :param deferrable: Use deferrable mode to release worker slot while waiting (default: True).
@@ -65,7 +65,7 @@ class HevoSensor(BaseSensorOperator):
     def __init__(
         self,
         pipeline_id: int,
-        connection_id: str,
+        connection_id: str = "hevo_airflow_conn_id",
         job_id: str | None = None,
         job_type: JobType = JobType.INCREMENTAL,
         poke_interval: int = 5,

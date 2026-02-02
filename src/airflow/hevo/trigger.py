@@ -37,13 +37,13 @@ class HevoTrigger(BaseTrigger):
                     Can be JobType enum or string for compatibility with deserialization.
     :param poke_interval: Seconds between status checks (default: 5).
     :param accept_completed_with_failures: Treat COMPLETED_WITH_FAILURES as success (default: False).
-    :param connection_id: Airflow connection ID for Hevo API credentials (default: None uses default connection).
+    :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
     """
 
     def __init__(
         self,
         pipeline_id: int,
-        connection_id: str,
+        connection_id: str = "hevo_airflow_conn_id",
         job_id: str | None = None,
         job_type: JobType = JobType.INCREMENTAL,
         poke_interval: int = 5,
