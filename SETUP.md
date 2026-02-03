@@ -29,16 +29,11 @@ git clone https://github.com/hevoio/hevo-airflow-provider.git
 cd hevo-airflow-provider
 ```
 
-### Step 3: Setup Development Environment
+### Step 3: Create Virtual Environment
 
 ```bash
-bash bin/setup-uv.sh
+uv venv
 ```
-
-This will:
-- Create a virtual environment with Python 3.9
-- Install all dependencies (including dev dependencies)
-- Setup git pre-commit hooks
 
 ### Step 4: Activate Virtual Environment
 
@@ -46,7 +41,13 @@ This will:
 source .venv/bin/activate
 ```
 
-### Step 5: Verify Installation
+### Step 5: Install Dependencies
+
+```bash
+uv pip install -e ".[dev]"
+```
+
+### Step 6: Verify Installation
 
 ```bash
 # Run tests
@@ -95,18 +96,11 @@ source venv/bin/activate  # On macOS/Linux
 pip install -e ".[dev]"
 ```
 
-### Step 4: Setup Git Hooks
-
-```bash
-sh bin/add-git-precommit-hook.sh
-```
-
-### Step 5: Verify Installation
+### Step 4: Verify Installation
 
 ```bash
 pytest
 ruff check src/
-mypy src/
 ```
 
 ---
@@ -186,7 +180,7 @@ cd docker/airflow-3.0
 ### Step 3: Build Docker Image
 
 ```bash
-docker-compose build
+docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
 ```
 
 This will:
@@ -198,7 +192,12 @@ This will:
 ### Step 4: Start Airflow Container
 
 ```bash
-docker-compose up -d
+ docker run -d  \
+      --name hevo-airflow-3.0   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-3.0
 ```
 
 ### Step 5: Access Airflow UI
@@ -212,13 +211,13 @@ Open your browser and navigate to `http://localhost:8080`
 ### Step 6: View Container Logs (Optional)
 
 ```bash
-docker-compose logs -f
+docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
 ```
 
 ### Step 7: Stop Container (When Needed)
 
 ```bash
-docker-compose down
+docker stop hevo-airflow-3.0
 ```
 
 ### Docker Environment Variables
@@ -452,8 +451,7 @@ rm -rf venv
 
 ```bash
 cd docker/airflow-2.4  # or airflow-3.0
-docker-compose down -v  # -v removes volumes (database data)
-docker rmi hevo-airflow-2.4  # Remove image
+docker rm hevo-airflow-2.4  # Remove image
 ```
 
 ### Uninstall Provider (Production):

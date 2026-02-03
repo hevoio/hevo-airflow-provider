@@ -14,14 +14,14 @@ Apache Airflow provider for Hevo Data's External Orchestration API. Enables trig
 
 ```bash
 # Quick setup with uv (recommended)
-bash bin/setup-uv.sh          # Install uv, create venv, install deps, setup hooks
+uv venv
 source .venv/bin/activate
+uv pip install -e ".[dev]"
 
 # Alternative with pip
 python3.9 -m venv venv
 source venv/bin/activate
 pip install -e ".[dev]"
-sh bin/add-git-precommit-hook.sh
 ```
 
 ### Testing & Quality
@@ -745,13 +745,3 @@ For production with many concurrent pipelines:
 - Python: >=3.9
 - Airflow: >=2.4.0 (requires deferrable support)
 - Tested on: Python 3.9, 3.10, 3.11, 3.12, 3.13
-
-## Pre-commit Hook
-
-Automatically runs `ruff` on staged files. Setup via:
-
-```bash
-sh bin/add-git-precommit-hook.sh
-```
-
-Hook runs: `ruff check` on modified Python files before commit.

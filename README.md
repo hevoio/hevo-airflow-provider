@@ -18,7 +18,6 @@ cd hevo-airflow-provider
 uv venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
-sh bin/add-git-precommit-hook.sh
 ```
 
 **📖 For detailed setup instructions**, see **[SETUP.md](SETUP.md)** which covers:
@@ -126,7 +125,7 @@ sync_task = HevoOperator(
 - `accept_completed_with_failures` (bool, default: `False`): Treat partial failures as success
 - `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `TRUNCATE_AND_LOAD` for RESYNC
 - `drop_and_load` (bool, default: `False`): Drop and recreate destination tables before loading (RESYNC action only)
-- `poll_interval` (int, default: `5`): Seconds between status checks
+- `poll_interval` (int, default: `15`): Seconds between status checks
 - `retry_limit` (int, default: `10`): Maximum attempts to find active job after triggering
 
 **Features:**
@@ -173,7 +172,7 @@ wait_task = HevoSensor(
 - `job_id` (str, optional): Specific job ID to monitor (supports Jinja templating)
 - `job_type` (JobType, default: `INCREMENTAL`): Job type for auto-discovery (when job_id not provided)
 - `deferrable` (bool, default: `True`): Use deferrable mode
-- `poke_interval` (int, default: `5`): Seconds between status checks
+- `poke_interval` (int, default: `15`): Seconds between status checks
 - `wait_for_job_initial_delay` (int, default: `10`): Initial delay before first discovery attempt
 - `wait_for_job_max_attempts` (int, default: `10`): Max attempts to find active job
 - `wait_for_job_interval` (int, default: `5`): Seconds between discovery attempts
