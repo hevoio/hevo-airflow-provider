@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from functools import cached_property
 from time import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 
 from airflow.hevo.hooks import HevoPipelineHook
 from airflow.hevo.models.job import JobCompletionStatus, JobType
-from airflow.hevo.models.pipeline import PipelineAction
+from airflow.hevo.models.pipeline import PipelineAction, PipelineStatus
 from airflow.hevo.trigger import HevoTrigger
 
 if TYPE_CHECKING:
@@ -22,7 +22,9 @@ class HevoPipelineOperator(BaseOperator):
 
     Supports two pipeline actions:
     1. SYNC_NOW: Trigger a regular sync (POST /pipelines/{id}/actions/sync-now)
+       - Validates pipeline is in INITIALIZED state (single check, fails if not)
     2. RESYNC: Trigger a full historical resync (POST /pipelines/{id}/actions/resync)
+       - Waits for pipeline to reach INITIALIZED state (infinite retries with poll_interval)
 
     Supports three execution modes:
     1. Fire-and-forget: ``wait_for_completion=False`` - Returns job_id
@@ -31,15 +33,17 @@ class HevoPipelineOperator(BaseOperator):
 
     :param pipeline_id: The Hevo pipeline ID to sync or resync.
     :param action: Pipeline action to trigger (default: PipelineAction.SYNC_NOW).
-                  - SYNC_NOW: Regular sync (requires pipeline in INITIALIZED state)
-                  - RESYNC: Full historical resync (re-ingests all data from source)
+                  - SYNC_NOW: Regular sync (validates pipeline in INITIALIZED state, fails if not)
+                  - RESYNC: Full historical resync (waits indefinitely for INITIALIZED state before triggering)
     :param job_type: Type of job to wait for. Defaults intelligently based on action:
                     - SYNC_NOW: JobType.INCREMENTAL (default)
                     - RESYNC: JobType.TRUNCATE_AND_LOAD (default)
                     Used when discovering the active job after triggering.
     :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
-    :param poll_interval: Seconds between status checks when waiting (default: 5).
+    :param poll_interval: Seconds between status checks when waiting (default: 15).
+                         For RESYNC action, also used as the interval for polling pipeline INITIALIZED status.
     :param retry_limit: Maximum HTTP retry attempts for API requests (default: 10).
+                       Note: Does not apply to RESYNC pipeline status polling, which has infinite retries.
     :param deferrable: Use deferrable execution to release worker slot while waiting (default: True).
                       Requires Airflow triggerer service to be running.
     :param wait_for_completion: Wait for the job to complete before returning (default: True).
@@ -58,19 +62,19 @@ class HevoPipelineOperator(BaseOperator):
     template_fields = ("pipeline_id",)
 
     def __init__(  # noqa: PLR0913
-        self,
-        pipeline_id: int,
-        connection_id: str = "hevo_airflow_conn_id",
-        action: PipelineAction = PipelineAction.SYNC_NOW,
-        job_type: JobType | None = None,
-        poll_interval: int = 5,
-        retry_limit: int = 10,
-        deferrable: bool = True,
-        wait_for_completion: bool = True,
-        accept_completed_with_failures: bool = False,
-        ensure_new_job: bool = True,
-        drop_and_load: bool = False,
-        **kwargs,
+            self,
+            pipeline_id: int,
+            connection_id: str = "hevo_airflow_conn_id",
+            action: PipelineAction = PipelineAction.SYNC_NOW,
+            job_type: Optional[JobType] = None,
+            poll_interval: int = 15,
+            retry_limit: int = 10,
+            deferrable: bool = True,
+            wait_for_completion: bool = True,
+            accept_completed_with_failures: bool = False,
+            ensure_new_job: bool = True,
+            drop_and_load: bool = False,
+            **kwargs,
     ) -> None:
         self.pipeline_id = pipeline_id
         self.action = action
@@ -96,7 +100,8 @@ class HevoPipelineOperator(BaseOperator):
         1. Triggers action based on self.action:
            - SYNC_NOW: Validates pipeline is in INITIALIZED state, then triggers sync
              (POST /pipelines/{id}/actions/sync-now)
-           - RESYNC: Triggers full historical resync (POST /pipelines/{id}/actions/resync)
+           - RESYNC: Waits for pipeline to reach INITIALIZED state (with infinite retries),
+             then triggers full historical resync (POST /pipelines/{id}/actions/resync)
         2. Polls up to retry_limit times (poll_interval seconds) for active job to appear
         3. Depending on configuration:
            - wait_for_completion=False: Returns job_id via XCom
@@ -117,6 +122,9 @@ class HevoPipelineOperator(BaseOperator):
             hook.trigger_pipeline_sync(self.pipeline_id, self.ensure_new_job)
             self.log.info("Sync triggered successfully for pipeline %s", self.pipeline_id)
         elif self.action == PipelineAction.RESYNC:
+            # Wait for pipeline to reach INITIALIZED status before triggering
+            self._wait_for_pipeline_initialized()
+
             self.log.info(
                 "Triggering full historical resync for pipeline %s (drop_and_load=%s)",
                 self.pipeline_id,
@@ -215,6 +223,35 @@ class HevoPipelineOperator(BaseOperator):
         else:
             self.log.error("Unexpected trigger event status: %s", status)
             raise AirflowException(f"Unexpected trigger event status: {status}")
+
+    def _wait_for_pipeline_initialized(self) -> None:
+        """
+        Wait for the pipeline to reach INITIALIZED status before triggering resync.
+
+        Continuously polls the pipeline status at poll_interval until the pipeline
+        reaches INITIALIZED state. This method has no retry limit and will poll
+        indefinitely until the pipeline is ready.
+
+        Used exclusively for RESYNC action to ensure the pipeline is in a valid
+        state before triggering a full historical resync operation.
+
+        :raises AirflowException: If pipeline does not exist or if there's an API error.
+        """
+        attempt = 0
+
+        while True:
+            attempt += 1
+            pipeline = self.hook.get_pipeline_sync(self.pipeline_id)
+            if pipeline is None:
+                raise AirflowException(f"Pipeline {self.pipeline_id} does not exist")
+            current_status = pipeline.status
+            if current_status == PipelineStatus.INITIALIZED:
+                self.log.info("Pipeline %s is now in INITIALIZED status, ready for resync", self.pipeline_id)
+                return
+            elif current_status != PipelineStatus.RESTARTING:
+                raise AirflowException(f"Pipeline {self.pipeline_id} is not in INITIALIZED state: {current_status}")
+            # Pipeline not initialized yet, wait and retry
+            sleep(self.poll_interval)
 
     def _wait_synchronously(self, job_id: str) -> None:
         """

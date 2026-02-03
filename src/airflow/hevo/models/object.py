@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -28,7 +28,6 @@ class ObjectStatus(str, Enum):
     INACTIVE = "INACTIVE"
     INCONSISTENT = "INCONSISTENT"
     RESETTING = "RESETTING"
-    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class ReplicationStatus(str, Enum):
@@ -44,7 +43,6 @@ class ReplicationStatus(str, Enum):
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
     INCONSISTENT = "INCONSISTENT"
-    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class LoadMode(str, Enum):
@@ -58,7 +56,7 @@ class LoadMode(str, Enum):
 
     APPEND = "APPEND"
     MERGE = "MERGE"
-    UNKNOWN = "UNKNOWN"  # Fallback for new load modes
+    OVERWRITE = "OVERWRITE"
 
 
 class FieldStatus(str, Enum):
@@ -75,7 +73,6 @@ class FieldStatus(str, Enum):
     INACTIVE = "INACTIVE"
     DISABLED = "DISABLED"
     INCONSISTENT = "INCONSISTENT"
-    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class ObjectField(BaseResponse):
@@ -90,7 +87,7 @@ class ObjectField(BaseResponse):
     source_type: str = Field(..., description="Data type in the source system")
     destination_name: str = Field(..., description="Field name in the destination system")
     destination_type: str = Field(..., description="Data type in the destination system")
-    status: FieldStatus | str = Field(..., description="Field status (ACTIVE, INACTIVE, etc.)")
+    status: Union[FieldStatus, str] = Field(..., description="Field status (ACTIVE, INACTIVE, etc.)")
     primary_key: bool = Field(False, description="Whether this field is part of the primary key")
 
     @field_validator("status", mode="before")
@@ -99,8 +96,7 @@ class ObjectField(BaseResponse):
         """
         Validate and normalize field status values.
 
-        If the API returns a new status that doesn't exist in our enum,
-        log a warning and return FieldStatus.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized field status.
         """
         if isinstance(value, FieldStatus):
             return value
@@ -108,13 +104,14 @@ class ObjectField(BaseResponse):
         # Try to match string value to known enum
         try:
             return FieldStatus(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown field status '%s' received from API. Please update FieldStatus enum. "
-                "Defaulting to FieldStatus.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown field status '{value}' received from Hevo API. "
+                f"Known statuses: {', '.join([status.value for status in FieldStatus])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return FieldStatus.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
 
 class Namespace(BaseResponse):
@@ -126,8 +123,8 @@ class Namespace(BaseResponse):
     """
 
     k0: str = Field(..., description="Object name (table/collection name)")
-    k1: str | None = Field(None, description="Schema name (optional)")
-    k2: str | None = Field(None, description="Database name (optional)")
+    k1: Optional[str] = Field(None, description="Schema name (optional)")
+    k2: Optional[str] = Field(None, description="Database name (optional)")
 
 
 class PipelineObject(BaseResponse):
@@ -142,17 +139,17 @@ class PipelineObject(BaseResponse):
     object_id: str = Field(..., description="Unique identifier for the pipeline object (UUID)")
     source_namespace: Namespace = Field(..., description="Source object identification (database.schema.object)")
     destination_namespace: Namespace = Field(..., description="Destination object identification")
-    field_count: int = Field(..., description="Total number of fields included in replication")
-    status: ObjectStatus | str = Field(..., description="Current operational state of the object")
-    replication_status: ReplicationStatus | str = Field(..., description="Data synchronization state")
+    status: Union[ObjectStatus, str] = Field(..., description="Current operational state of the object")
+    field_count: Optional[int] = Field(None, description="Total number of fields included in replication")
+    replication_status: Optional[Union[ReplicationStatus, str]] = Field(None, description="Data synchronization state")
 
     # Additional fields returned by GET /api/v1/pipelines/{id}/objects/{object_id} (details endpoint)
-    object_name: str | None = Field(None, description="Display name of the object")
-    destination_table_name: str | None = Field(
+    object_name: Optional[str] = Field(None, description="Display name of the object")
+    destination_table_name: Optional[str] = Field(
         None, description="Name of the destination table created for this object"
     )
-    load_mode: LoadMode | str | None = Field(None, description="How data is loaded (APPEND or MERGE)")
-    fields: list[ObjectField] | None = Field(None, description="List of field mappings from source to destination")
+    load_mode: Optional[Union[LoadMode, str]] = Field(None, description="How data is loaded (APPEND or MERGE)")
+    fields: Optional[list[ObjectField]] = Field(None, description="List of field mappings from source to destination")
 
     @field_validator("status", mode="before")
     @classmethod
@@ -160,8 +157,7 @@ class PipelineObject(BaseResponse):
         """
         Validate and normalize object status values.
 
-        If the API returns a new status that doesn't exist in our enum,
-        log a warning and return ObjectStatus.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized object status.
         """
         if isinstance(value, ObjectStatus):
             return value
@@ -169,13 +165,14 @@ class PipelineObject(BaseResponse):
         # Try to match string value to known enum
         try:
             return ObjectStatus(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown object status '%s' received from API. Please update ObjectStatus enum. "
-                "Defaulting to ObjectStatus.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown object status '{value}' received from Hevo API. "
+                f"Known statuses: {', '.join([status.value for status in ObjectStatus])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return ObjectStatus.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("replication_status", mode="before")
     @classmethod
@@ -183,8 +180,7 @@ class PipelineObject(BaseResponse):
         """
         Validate and normalize replication status values.
 
-        If the API returns a new status that doesn't exist in our enum,
-        log a warning and return ReplicationStatus.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized replication status.
         """
         if isinstance(value, ReplicationStatus):
             return value
@@ -192,23 +188,24 @@ class PipelineObject(BaseResponse):
         # Try to match string value to known enum
         try:
             return ReplicationStatus(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown replication status '%s' received from API. Please update ReplicationStatus enum. "
-                "Defaulting to ReplicationStatus.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown replication status '{value}' received from Hevo API. "
+                f"Known statuses: {', '.join([s.value for s in ReplicationStatus])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return ReplicationStatus.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("load_mode", mode="before")
     @classmethod
-    def validate_load_mode(cls, value: Any) -> LoadMode | None:
+    def validate_load_mode(cls, value: Any) -> Optional[LoadMode]:
         """
         Validate and normalize load mode values.
 
-        If the API returns a new load mode that doesn't exist in our enum,
-        log a warning and return LoadMode.UNKNOWN to prevent breaking.
         Returns None if value is None (field is optional).
+
+        :raises ValueError: If the API returns an unrecognized load mode.
         """
         if value is None:
             return None
@@ -219,12 +216,14 @@ class PipelineObject(BaseResponse):
         # Try to match string value to known enum
         try:
             return LoadMode(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown load mode '%s' received from API. Please update LoadMode enum. Defaulting to LoadMode.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown load mode '{value}' received from Hevo API. "
+                f"Known modes: {', '.join([mode.value for mode in LoadMode])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return LoadMode.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
 
 class PaginatedObjectsResponse(BaseResponse):
@@ -237,4 +236,4 @@ class PaginatedObjectsResponse(BaseResponse):
 
     data: list[PipelineObject] = Field(..., description="List of pipeline objects")
     has_more: bool = Field(..., description="Whether more results are available")
-    next_cursor: str | None = Field(None, description="Cursor for the next page of results")
+    next_cursor: Optional[str] = Field(None, description="Cursor for the next page of results")

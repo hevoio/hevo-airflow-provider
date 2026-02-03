@@ -218,23 +218,22 @@ class TestRefreshSchemaAsync:
 
             assert result is None
             mock_request.assert_called_once_with(
-                method="POST", endpoint="/api/v1/pipelines/123/objects/actions/refresh-schema", payload={}
+                method="POST", endpoint="/api/v1/pipelines/123/objects/actions/refresh-schema"
             )
 
     @pytest.mark.asyncio
     async def test_refresh_schema_with_config(self) -> None:
-        """Test schema refresh with custom config."""
+        """Test schema refresh without config parameter."""
         hook = HevoObjectHook()
-        refresh_config = {"objects": ["users", "orders"]}
 
         with patch.object(hook, "execute_api_request_async", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = {"status": "success"}
 
-            result = await hook.refresh_schema_async(123, refresh_config)
+            result = await hook.refresh_schema_async(123)
 
             assert result is None
             mock_request.assert_called_once_with(
-                method="POST", endpoint="/api/v1/pipelines/123/objects/actions/refresh-schema", payload=refresh_config
+                method="POST", endpoint="/api/v1/pipelines/123/objects/actions/refresh-schema"
             )
 
 
@@ -251,7 +250,7 @@ class TestRefreshSchemaSync:
             result = hook.refresh_schema_sync(123)
 
             assert result is None
-            mock_async.assert_called_once_with(123, None)
+            mock_async.assert_called_once_with(123)
 
 
 class TestResyncObjectsAsync:

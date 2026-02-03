@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import aiohttp
 from aiohttp import ClientResponseError
 from airflow.exceptions import AirflowException
 from airflow.hooks.base import BaseHook
+from asgiref.sync import sync_to_async
 
 from airflow import __version__ as airflow_version
 
@@ -39,12 +40,12 @@ class BaseHevoHook(BaseHook):
     api_user_agent = "hevo_airflow_provider"
 
     def __init__(
-        self,
-        connection_id: str | None = None,
-        retry_limit: int = 3,
-        retry_delay: int = 2,
-        timeout: int = 30,
-        retryable_status_codes: list[int] | None = None,
+            self,
+            connection_id: Optional[str] = None,
+            retry_limit: int = 3,
+            retry_delay: int = 2,
+            timeout: int = 30,
+            retryable_status_codes: Optional[list[int]] = None,
     ) -> None:
         """
         Initialize a Hevo API hook with common request defaults.
@@ -68,7 +69,7 @@ class BaseHevoHook(BaseHook):
 
         # Lazy connection retrieval - don't fetch in __init__ to avoid AsyncToSync issues
         # when hook is created from async context (e.g., in triggers)
-        self._airflow_hevo_connection: Connection | None = None
+        self._airflow_connection: Optional[Connection] = None
 
         self.retry_limit = retry_limit
         self.retry_delay = retry_delay
@@ -91,23 +92,23 @@ class BaseHevoHook(BaseHook):
         :returns: The Airflow Connection object.
         :raises AirflowException: If connection cannot be retrieved or is invalid.
         """
-        if self._airflow_hevo_connection is not None:
-            return self._airflow_hevo_connection
+        if self._airflow_connection is not None:
+            return self._airflow_connection
 
         # Use asyncio.to_thread to run the synchronous get_connection in a separate thread
         # This avoids the AsyncToSync error when called from within an async event loop
         try:
-            self._airflow_hevo_connection = await asyncio.to_thread(self.get_connection, self.connection_id)
+            self._airflow_connection = await sync_to_async(self.get_connection)(self.connection_id)
         except Exception as e:
             raise AirflowException(f"Failed to retrieve connection {self.connection_id}: {e}") from e
 
-        if self._airflow_hevo_connection is None:
+        if self._airflow_connection is None:
             raise AirflowException(f"Connection {self.connection_id} not found.")
 
-        if not self._airflow_hevo_connection.host:
+        if not self._airflow_connection.host:
             raise AirflowException("Hevo connection must define a host (base API domain).")
 
-        return self._airflow_hevo_connection
+        return self._airflow_connection
 
     def _build_api_url(self, airflow_hevo_connection: Connection, endpoint: str) -> str:
         """
@@ -129,11 +130,11 @@ class BaseHevoHook(BaseHook):
         return url
 
     async def execute_api_request_async(
-        self,
-        method: str,
-        endpoint: str,
-        params: dict[str, Any] | None = None,
-        payload: dict[str, Any] | None = None,
+            self,
+            method: str,
+            endpoint: str,
+            params: dict[str, Any] | None = None,
+            payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Perform an asynchronous API request with retries.
@@ -163,8 +164,6 @@ class BaseHevoHook(BaseHook):
                     response = await session.request(
                         method, url, params=params, json=payload, auth=auth, headers=headers, timeout=timeout
                     )
-                    self.log.info("Request to %s returned status %s", url, response.status)
-
                     response.raise_for_status()
 
                     # Check if there's content to parse

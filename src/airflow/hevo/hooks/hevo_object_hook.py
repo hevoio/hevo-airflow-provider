@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Optional
 
 from airflow.hevo.hooks.base import BaseHevoHook
 from airflow.hevo.models.object import PaginatedObjectsResponse, PipelineObject
@@ -26,7 +26,7 @@ class HevoObjectHook(BaseHevoHook):
     # Async API Methods
 
     async def list_objects_async(
-        self, pipeline_id: int, limit: int = 100, cursor: str | None = None
+            self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
     ) -> PaginatedObjectsResponse:
         """
         List all objects in a pipeline (async).
@@ -69,7 +69,7 @@ class HevoObjectHook(BaseHevoHook):
         self.log.info("Fetched object %s successfully", object_id)
         return PipelineObject(**response)
 
-    async def refresh_schema_async(self, pipeline_id: int, refresh_config: dict[str, Any] | None = None) -> None:
+    async def refresh_schema_async(self, pipeline_id: int) -> None:
         """
         Refresh object schemas from source (async).
 
@@ -78,15 +78,12 @@ class HevoObjectHook(BaseHevoHook):
         been modified.
 
         :param pipeline_id: Unique pipeline identifier.
-        :param refresh_config: Optional configuration for schema refresh.
-                              May include specific objects to refresh or refresh options.
         :raises AirflowException: For API errors (auth, network, server errors).
         """
         self.log.info("Refreshing schema for pipeline %s", pipeline_id)
         await self.execute_api_request_async(
             method="POST",
             endpoint=f"/api/v1/pipelines/{pipeline_id}/objects/actions/refresh-schema",
-            payload=refresh_config or {},
         )
         self.log.info("Schema refreshed successfully for pipeline %s", pipeline_id)
 
@@ -100,7 +97,8 @@ class HevoObjectHook(BaseHevoHook):
 
         :param pipeline_id: Unique pipeline identifier.
         :param resync_config: Configuration specifying which objects to resync.
-                             Typically contains 'objects' list with object IDs.
+                              Typically contains 'objects' list with object IDs.
+                              Requires object_ids and drop_and_load parameter.
         :raises AirflowException: For API errors (auth, network, server errors, validation errors).
         """
         self.log.info("Resyncing objects for pipeline %s with config: %s", pipeline_id, resync_config)
@@ -113,7 +111,7 @@ class HevoObjectHook(BaseHevoHook):
     # These methods wrap the async methods above using asyncio.run()
 
     def list_objects_sync(
-        self, pipeline_id: int, limit: int = 100, cursor: str | None = None
+            self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
     ) -> PaginatedObjectsResponse:
         """
         List all objects in a pipeline (sync wrapper).
@@ -130,13 +128,13 @@ class HevoObjectHook(BaseHevoHook):
         """
         return asyncio.run(self.get_object_async(pipeline_id, object_id))
 
-    def refresh_schema_sync(self, pipeline_id: int, refresh_config: dict[str, Any] | None = None) -> None:
+    def refresh_schema_sync(self, pipeline_id: int) -> None:
         """
         Refresh object schemas from source (sync wrapper).
 
         See refresh_schema_async() for full documentation.
         """
-        asyncio.run(self.refresh_schema_async(pipeline_id, refresh_config))
+        asyncio.run(self.refresh_schema_async(pipeline_id))
 
     def resync_objects_sync(self, pipeline_id: int, resync_config: dict[str, Any]) -> None:
         """

@@ -28,18 +28,18 @@ The `HevoOperator` triggers and optionally waits for Hevo pipeline syncs or resy
 
 ### Optional Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `action` | `PipelineAction` | `PipelineAction.SYNC_NOW` | Pipeline action to trigger:<br>- `SYNC_NOW`: Regular incremental sync (POST `/pipelines/{id}/actions/sync-now`). Requires pipeline in INITIALIZED state.<br>- `RESYNC`: Full historical resync (POST `/pipelines/{id}/actions/resync`). Re-ingests all data from source. |
+| Parameter | Type | Default                                                                             | Description |
+|-----------|------|-------------------------------------------------------------------------------------|-------------|
+| `action` | `PipelineAction` | `PipelineAction.SYNC_NOW`                                                           | Pipeline action to trigger:<br>- `SYNC_NOW`: Regular incremental sync (POST `/pipelines/{id}/actions/sync-now`). Requires pipeline in INITIALIZED state.<br>- `RESYNC`: Full historical resync (POST `/pipelines/{id}/actions/resync`). Re-ingests all data from source. |
 | `job_type` | `JobType` or `str` | **Intelligent default**<br>`INCREMENTAL` (SYNC_NOW)<br>`TRUNCATE_AND_LOAD` (RESYNC) | Type of job to wait for when discovering the active job after triggering. Defaults intelligently based on action. Can be explicitly set to `INCREMENTAL`, `HISTORICAL`, or `TRUNCATE_AND_LOAD`. |
-| `connection_id` | `str` | `hevo_airflow_conn_id` (uses default) | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`. |
-| `poll_interval` | `int` | `5` | Seconds between status checks when waiting for completion. |
-| `retry_limit` | `int` | `10` | Maximum number of attempts to find the active job after triggering sync. |
-| `deferrable` | `bool` | `True` | Use deferrable execution to release worker slot while waiting. Requires Airflow triggerer service to be running. **Recommended for production.** |
-| `wait_for_completion` | `bool` | `True` | Wait for the job to complete before returning. If `False`, returns `job_id` immediately via XCom for use with `HevoSensor`. |
-| `accept_completed_with_failures` | `bool` | `False` | Treat `COMPLETED_WITH_FAILURES` status as success. Useful when partial failures (e.g., some records failing) are acceptable. |
-| `ensure_new_job` | `bool` | `True` | If `True`, fails if a job is already in progress for the pipeline (default behavior). If `False`, proceeds normally even if a job already exists. Useful to prevent triggering duplicate jobs when previous jobs are still running. **Only applies to SYNC_NOW action.** |
-| `drop_and_load` | `bool` | `False` | If `True`, drops existing destination tables before loading. Ensures a clean slate by recreating tables from scratch. **Only applies to RESYNC action.** Useful for completely refreshing data when schema or data quality issues require a clean restart. |
+| `connection_id` | `str` | `hevo_airflow_conn_id` (uses default)                                               | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`. |
+| `poll_interval` | `int` | `15`                                                                                | Seconds between status checks when waiting for completion. |
+| `retry_limit` | `int` | `10`                                                                                | Maximum number of attempts to find the active job after triggering sync. |
+| `deferrable` | `bool` | `True`                                                                              | Use deferrable execution to release worker slot while waiting. Requires Airflow triggerer service to be running. **Recommended for production.** |
+| `wait_for_completion` | `bool` | `True`                                                                              | Wait for the job to complete before returning. If `False`, returns `job_id` immediately via XCom for use with `HevoSensor`. |
+| `accept_completed_with_failures` | `bool` | `False`                                                                             | Treat `COMPLETED_WITH_FAILURES` status as success. Useful when partial failures (e.g., some records failing) are acceptable. |
+| `ensure_new_job` | `bool` | `True`                                                                              | If `True`, fails if a job is already in progress for the pipeline (default behavior). If `False`, proceeds normally even if a job already exists. Useful to prevent triggering duplicate jobs when previous jobs are still running. **Only applies to SYNC_NOW action.** |
+| `drop_and_load` | `bool` | `False`                                                                             | If `True`, drops existing destination tables before loading. Ensures a clean slate by recreating tables from scratch. **Only applies to RESYNC action.** Useful for completely refreshing data when schema or data quality issues require a clean restart. |
 
 ### Pipeline Actions
 
@@ -176,17 +176,17 @@ The `HevoSensor` monitors Hevo pipeline job completion with auto-discovery suppo
 
 ### Optional Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `job_id` | `str` | `None` | Optional job identifier. If provided, monitors this specific job. If not provided, discovers the active job via auto-discovery. Supports Jinja templating (e.g., XCom pulls). |
-| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL` | Job type for auto-discovery. Only used when `job_id` is not provided. Can be `INCREMENTAL`, `HISTORICAL`, or `TRUNCATE_AND_LOAD`. |
+| Parameter | Type | Default                               | Description |
+|-----------|------|---------------------------------------|-------------|
+| `job_id` | `str` | `None`                                | Optional job identifier. If provided, monitors this specific job. If not provided, discovers the active job via auto-discovery. Supports Jinja templating (e.g., XCom pulls). |
+| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL`                 | Job type for auto-discovery. Only used when `job_id` is not provided. Can be `INCREMENTAL`, `HISTORICAL`, or `TRUNCATE_AND_LOAD`. |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default) | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`. |
-| `poke_interval` | `int` | `5` | Seconds between status checks when polling for job completion. |
-| `accept_completed_with_failures` | `bool` | `False` | Treat `COMPLETED_WITH_FAILURES` status as success. |
-| `deferrable` | `bool` | `True` | Use deferrable mode to release worker slot while waiting. Requires Airflow triggerer service. |
-| `wait_for_job_max_attempts` | `int` | `10` | Maximum attempts to find active job in auto-discovery mode. |
-| `wait_for_job_interval` | `int` | `5` | Seconds between discovery attempts when looking for active job. |
-| `wait_for_job_initial_delay` | `int` | `10` | Initial delay (in seconds) before first discovery attempt. Allows time for job to be created in Hevo system. |
+| `poke_interval` | `int` | `15`                                  | Seconds between status checks when polling for job completion. |
+| `accept_completed_with_failures` | `bool` | `False`                               | Treat `COMPLETED_WITH_FAILURES` status as success. |
+| `deferrable` | `bool` | `True`                                | Use deferrable mode to release worker slot while waiting. Requires Airflow triggerer service. |
+| `wait_for_job_max_attempts` | `int` | `10`                                  | Maximum attempts to find active job in auto-discovery mode. |
+| `wait_for_job_interval` | `int` | `5`                                   | Seconds between discovery attempts when looking for active job. |
+| `wait_for_job_initial_delay` | `int` | `10`                                  | Initial delay (in seconds) before first discovery attempt. Allows time for job to be created in Hevo system. |
 
 ### Discovery Modes
 
@@ -254,13 +254,13 @@ The `HevoTrigger` is used internally by deferrable operators and sensors for asy
 
 ### Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `pipeline_id` | `int` | Required | Unique pipeline identifier to monitor. |
-| `job_id` | `str` | `None` | Optional job identifier. If `None`, auto-discovers active job by type. |
-| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL` | Job type for auto-discovery. Can be enum or string for compatibility with deserialization. |
-| `poke_interval` | `int` | `5` | Seconds between status checks during async polling. |
-| `accept_completed_with_failures` | `bool` | `False` | Treat `COMPLETED_WITH_FAILURES` status as success. |
+| Parameter | Type | Default                               | Description |
+|-----------|------|---------------------------------------|-------------|
+| `pipeline_id` | `int` | Required                              | Unique pipeline identifier to monitor. |
+| `job_id` | `str` | `None`                                | Optional job identifier. If `None`, auto-discovers active job by type. |
+| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL`                 | Job type for auto-discovery. Can be enum or string for compatibility with deserialization. |
+| `poke_interval` | `int` | `15`                                  | Seconds between status checks during async polling. |
+| `accept_completed_with_failures` | `bool` | `False`                               | Treat `COMPLETED_WITH_FAILURES` status as success. |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default) | Airflow connection ID for Hevo API credentials. |
 
 ### Technical Notes

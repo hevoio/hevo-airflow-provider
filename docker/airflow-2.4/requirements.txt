@@ -3,11 +3,11 @@
 # Additional Apache Airflow Providers
 apache-airflow-providers-http==4.1.0
 apache-airflow-providers-mysql==3.4.0
-apache-airflow-providers-apache-spark==4.0.0
 apache-airflow-providers-snowflake==4.2.0
 
 # Hevo Provider Dependencies
 aiohttp==3.13.2
+pydantic>=2.0.0
 
 # Hevo Airflow Provider (local)
 # Will be installed from parent directory during Docker build

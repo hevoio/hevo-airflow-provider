@@ -22,7 +22,7 @@ class TestHevoTriggerInit:
         assert trigger.pipeline_id == 123
         assert trigger.job_id == "job_123"
         assert trigger.job_type == JobType.INCREMENTAL.value
-        assert trigger.poke_interval == 5
+        assert trigger.poke_interval == 15
         assert trigger.accept_completed_with_failures is False
         assert trigger.connection_id == "hevo_test_connection"
 

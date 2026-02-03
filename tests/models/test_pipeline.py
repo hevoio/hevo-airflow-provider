@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from airflow.hevo.models.pipeline import (
     Destination,
     FailureHandlingPolicy,
@@ -98,6 +101,12 @@ class TestSchedule:
         assert schedule.sync_type == SyncType.SCHEDULED
         assert schedule.frequency_minutes == 60
 
+    def test_schedule_without_sync_type(self) -> None:
+        """Test schedule can be created without sync_type (optional field)."""
+        schedule = Schedule()
+        assert schedule.sync_type is None
+        assert schedule.frequency_minutes is None
+
 
 class TestFailureHandlingPolicy:
     """Tests for FailureHandlingPolicy model."""
@@ -184,48 +193,56 @@ class TestPipeline:
         assert pipeline.name == "Test Pipeline"
 
     def test_pipeline_unknown_status_from_api(self, sample_pipeline_response) -> None:
-        """Test that unknown status values from API are handled gracefully."""
+        """Test that unknown status values from API raise an exception."""
         data = sample_pipeline_response.copy()
         data["status"] = "NEW_STATUS_FROM_API"
 
-        pipeline = Pipeline(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert pipeline.status == PipelineStatus.UNKNOWN
-        assert pipeline.id == 123
-        assert pipeline.name == "Test Pipeline"
+        with pytest.raises(ValidationError) as exc_info:
+            Pipeline(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_STATUS_FROM_API" in error_str
+        assert "Unknown pipeline status" in error_str
 
     def test_pipeline_unknown_replication_type_from_api(self, sample_pipeline_response) -> None:
-        """Test that unknown replication type values from API are handled gracefully."""
+        """Test that unknown replication type values from API raise an exception."""
         data = sample_pipeline_response.copy()
         data["replication_type"] = "NEW_REPLICATION_TYPE_FROM_API"
 
-        pipeline = Pipeline(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert pipeline.replication_type == ReplicationType.UNKNOWN
-        assert pipeline.id == 123
-        assert pipeline.name == "Test Pipeline"
+        with pytest.raises(ValidationError) as exc_info:
+            Pipeline(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_REPLICATION_TYPE_FROM_API" in error_str
+        assert "Unknown replication type" in error_str
 
     def test_pipeline_unknown_load_mode_from_api(self, sample_pipeline_response) -> None:
-        """Test that unknown load mode values from API are handled gracefully."""
+        """Test that unknown load mode values from API raise an exception."""
         data = sample_pipeline_response.copy()
         data["load_mode"] = "NEW_LOAD_MODE_FROM_API"
 
-        pipeline = Pipeline(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert pipeline.load_mode == LoadMode.UNKNOWN
-        assert pipeline.id == 123
-        assert pipeline.name == "Test Pipeline"
+        with pytest.raises(ValidationError) as exc_info:
+            Pipeline(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_LOAD_MODE_FROM_API" in error_str
+        assert "Unknown load mode" in error_str
 
     def test_pipeline_unknown_schema_evolution_from_api(self, sample_pipeline_response) -> None:
-        """Test that unknown schema evolution values from API are handled gracefully."""
+        """Test that unknown schema evolution values from API raise an exception."""
         data = sample_pipeline_response.copy()
         data["schema_evolution"] = "NEW_SCHEMA_EVOLUTION_FROM_API"
 
-        pipeline = Pipeline(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert pipeline.schema_evolution == SchemaEvolution.UNKNOWN
-        assert pipeline.id == 123
-        assert pipeline.name == "Test Pipeline"
+        with pytest.raises(ValidationError) as exc_info:
+            Pipeline(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_SCHEMA_EVOLUTION_FROM_API" in error_str
+        assert "Unknown schema evolution" in error_str
 
 
 class TestPaginatedPipelinesResponse:

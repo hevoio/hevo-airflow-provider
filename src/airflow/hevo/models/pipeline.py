@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -30,7 +30,6 @@ class PipelineStatus(str, Enum):
     DELETE_FAILED = "DELETE_FAILED"
     RESTARTING = "RESTARTING"
     RESTART_FAILED = "RESTART_FAILED"
-    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class SyncType(str, Enum):
@@ -70,7 +69,6 @@ class ReplicationType(str, Enum):
 
     HISTORICAL_AND_INCREMENTAL = "HISTORICAL_AND_INCREMENTAL"
     INCREMENTAL_ONLY = "INCREMENTAL_ONLY"
-    UNKNOWN = "UNKNOWN"  # Fallback for new replication types
 
 
 class LoadMode(str, Enum):
@@ -84,7 +82,6 @@ class LoadMode(str, Enum):
 
     APPEND = "APPEND"
     MERGE = "MERGE"
-    UNKNOWN = "UNKNOWN"  # Fallback for new load modes
 
 
 class SchemaEvolution(str, Enum):
@@ -100,7 +97,6 @@ class SchemaEvolution(str, Enum):
     ALLOW_ALL = "ALLOW_ALL"
     BLOCK_ALL = "BLOCK_ALL"
     ALLOW_COLUMN_LEVEL = "ALLOW_COLUMN_LEVEL"
-    UNKNOWN = "UNKNOWN"  # Fallback for new schema evolution strategies
 
 
 class Source(BaseResponse):
@@ -109,7 +105,7 @@ class Source(BaseResponse):
     name: str = Field(..., description="Source name")
     connector_id: str = Field(..., description="Source connector ID")
     source_type: str = Field(..., description="Type of source connector")
-    config: dict[str, Any] | None = Field(None, description="Source connection configuration")
+    config: Optional[dict[str, Any]] = Field(None, description="Source connection configuration")
 
 
 class Destination(BaseResponse):
@@ -119,14 +115,14 @@ class Destination(BaseResponse):
     name: str = Field(..., description="Destination name")
     connector_id: str = Field(..., description="Destination connector ID")
     destination_type: str = Field(..., description="Type of destination")
-    status: str | None = Field(None, description="Destination status")
+    status: Optional[str] = Field(None, description="Destination status")
 
 
 class Schedule(BaseResponse):
     """Pipeline schedule configuration."""
 
-    sync_type: SyncType = Field(..., description="Sync type (ON_DEMAND or SCHEDULED)")
-    frequency_minutes: int | None = Field(None, description="Sync frequency in minutes (only for SCHEDULED)")
+    sync_type: Optional[SyncType] = Field(None, description="Sync type (ON_DEMAND or SCHEDULED)")
+    frequency_minutes: Optional[int] = Field(None, description="Sync frequency in minutes (only for SCHEDULED)")
 
 
 class FailureHandlingPolicy(BaseResponse):
@@ -140,14 +136,14 @@ class LatencyAlert(BaseResponse):
     """Pipeline latency alert configuration."""
 
     enabled: bool = Field(..., description="Whether latency alerts are enabled")
-    threshold_minutes: int | None = Field(None, description="Latency threshold in minutes")
+    threshold_minutes: Optional[int] = Field(None, description="Latency threshold in minutes")
 
 
 class SourceSchemaStatus(BaseResponse):
     """Source schema refresh status."""
 
     status: str = Field(..., description="Schema refresh status")
-    refreshed_ts: int | None = Field(None, description="Last schema refresh timestamp in milliseconds")
+    refreshed_ts: Optional[int] = Field(None, description="Last schema refresh timestamp in milliseconds")
 
 
 class Pipeline(BaseResponse):
@@ -163,13 +159,13 @@ class Pipeline(BaseResponse):
 
     id: int = Field(..., description="Unique pipeline identifier")
     name: str = Field(..., description="Pipeline name")
-    status: PipelineStatus | str = Field(..., description="Current pipeline status")
+    status: Union[PipelineStatus, str] = Field(..., description="Current pipeline status")
     source: Source = Field(..., description="Source configuration")
     destination: Destination = Field(..., description="Destination configuration")
     destination_prefix: str = Field(..., description="Prefix used for destination table names")
-    replication_type: ReplicationType | str = Field(..., description="Type of data replicated")
-    load_mode: LoadMode | str = Field(..., description="How data is loaded (APPEND or MERGE)")
-    schema_evolution: SchemaEvolution | str = Field(..., description="Schema change handling strategy")
+    replication_type: Union[ReplicationType, str] = Field(..., description="Type of data replicated")
+    load_mode: Union[LoadMode, str] = Field(..., description="How data is loaded (APPEND or MERGE)")
+    schema_evolution: Union[SchemaEvolution, str] = Field(..., description="Schema change handling strategy")
     schedule: Schedule = Field(..., description="Synchronization timing configuration")
     failure_handling_policy: FailureHandlingPolicy = Field(..., description="Failure handling settings")
     source_schema_status: SourceSchemaStatus = Field(..., description="Schema refresh details")
@@ -179,7 +175,7 @@ class Pipeline(BaseResponse):
     updated_ts: int = Field(..., description="Last update timestamp in milliseconds since epoch")
 
     # Optional fields that may not always be present
-    latency_alert: LatencyAlert | None = Field(None, description="Latency alert configuration")
+    latency_alert: Optional[LatencyAlert] = Field(None, description="Latency alert configuration")
 
     @field_validator("status", mode="before")
     @classmethod
@@ -187,8 +183,7 @@ class Pipeline(BaseResponse):
         """
         Validate and normalize pipeline status values.
 
-        If the API returns a new status that doesn't exist in our enum,
-        log a warning and return PipelineStatus.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized pipeline status.
         """
         if isinstance(value, PipelineStatus):
             return value
@@ -196,13 +191,14 @@ class Pipeline(BaseResponse):
         # Try to match string value to known enum
         try:
             return PipelineStatus(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown pipeline status '%s' received from API. Please update PipelineStatus enum. "
-                "Defaulting to PipelineStatus.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown pipeline status '{value}' received from Hevo API. "
+                f"Known statuses: {', '.join([s.value for s in PipelineStatus])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return PipelineStatus.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("replication_type", mode="before")
     @classmethod
@@ -210,8 +206,7 @@ class Pipeline(BaseResponse):
         """
         Validate and normalize replication type values.
 
-        If the API returns a new replication type that doesn't exist in our enum,
-        log a warning and return ReplicationType.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized replication type.
         """
         if isinstance(value, ReplicationType):
             return value
@@ -219,13 +214,14 @@ class Pipeline(BaseResponse):
         # Try to match string value to known enum
         try:
             return ReplicationType(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown replication type '%s' received from API. Please update ReplicationType enum. "
-                "Defaulting to ReplicationType.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown replication type '{value}' received from Hevo API. "
+                f"Known types: {', '.join([t.value for t in ReplicationType])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return ReplicationType.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("load_mode", mode="before")
     @classmethod
@@ -233,8 +229,7 @@ class Pipeline(BaseResponse):
         """
         Validate and normalize load mode values.
 
-        If the API returns a new load mode that doesn't exist in our enum,
-        log a warning and return LoadMode.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized load mode.
         """
         if isinstance(value, LoadMode):
             return value
@@ -242,12 +237,14 @@ class Pipeline(BaseResponse):
         # Try to match string value to known enum
         try:
             return LoadMode(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown load mode '%s' received from API. Please update LoadMode enum. Defaulting to LoadMode.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown load mode '{value}' received from Hevo API. "
+                f"Known modes: {', '.join([m.value for m in LoadMode])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return LoadMode.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("schema_evolution", mode="before")
     @classmethod
@@ -255,8 +252,7 @@ class Pipeline(BaseResponse):
         """
         Validate and normalize schema evolution values.
 
-        If the API returns a new schema evolution strategy that doesn't exist in our enum,
-        log a warning and return SchemaEvolution.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized schema evolution strategy.
         """
         if isinstance(value, SchemaEvolution):
             return value
@@ -264,13 +260,14 @@ class Pipeline(BaseResponse):
         # Try to match string value to known enum
         try:
             return SchemaEvolution(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown schema evolution '%s' received from API. Please update SchemaEvolution enum. "
-                "Defaulting to SchemaEvolution.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown schema evolution strategy '{value}' received from Hevo API. "
+                f"Known strategies: {', '.join([s.value for s in SchemaEvolution])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return SchemaEvolution.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
 
 class PaginatedPipelinesResponse(BaseResponse):
@@ -283,4 +280,4 @@ class PaginatedPipelinesResponse(BaseResponse):
 
     data: list[Pipeline] = Field(..., description="List of pipelines")
     has_more: bool = Field(..., description="Whether more results are available")
-    next_cursor: str | None = Field(None, description="Cursor for the next page")
+    next_cursor: Optional[str] = Field(None, description="Cursor for the next page")

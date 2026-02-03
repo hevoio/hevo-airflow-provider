@@ -162,7 +162,7 @@ class TestValidatePipelineAsync:
     async def test_validate_pipeline_not_initialized(self, sample_pipeline_response) -> None:
         """Test validation when pipeline not in INITIALIZED state."""
         hook = HevoPipelineHook()
-        sample_pipeline_response["status"] = "PAUSED"
+        sample_pipeline_response["status"] = "DISABLED"
 
         with patch.object(hook, "get_pipeline_async", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = Pipeline(**sample_pipeline_response)
@@ -448,7 +448,7 @@ class TestGetJobCompletionStatusAsync:
 
     @pytest.mark.asyncio
     async def test_get_status_unknown_status_from_api(self) -> None:
-        """Test that unknown status from API is treated as pending."""
+        """Test that unknown status from API raises an exception."""
         hook = HevoPipelineHook()
 
         # Simulate API returning a new status that doesn't exist in our enum
@@ -457,10 +457,12 @@ class TestGetJobCompletionStatusAsync:
         with patch.object(hook, "execute_api_request_async", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = job_data
 
-            status = await hook.get_job_completion_status_async(123, "job_new")
+            # Unknown status should raise ValidationError
+            with pytest.raises(Exception) as exc_info:
+                await hook.get_job_completion_status_async(123, "job_new")
 
-            # Unknown status should be treated as PENDING to continue monitoring
-            assert status == JobCompletionStatus.PENDING
+            # Verify it's a validation error with helpful message
+            assert "Unknown job status" in str(exc_info.value) or "NEW_FUTURE_STATUS" in str(exc_info.value)
 
 
 class TestGetJobCompletionStatusSync:
@@ -641,7 +643,9 @@ class TestDisablePipelineAsync:
 
             await hook.disable_pipeline_async(123)
 
-            mock_request.assert_called_once_with(method="POST", endpoint="/api/v1/pipelines/123/actions/disable")
+            mock_request.assert_called_once_with(
+                method="POST", endpoint="/api/v1/pipelines/123/actions/disable", payload={"cancel_active_jobs": False}
+            )
 
 
 class TestDisablePipelineSync:

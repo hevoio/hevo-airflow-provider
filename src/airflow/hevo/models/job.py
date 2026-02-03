@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -29,7 +29,6 @@ class JobStatus(str, Enum):
     SKIPPED = "SKIPPED"
     DEFERRED = "DEFERRED"
     DEFERRED_WITH_FAILURES = "DEFERRED_WITH_FAILURES"
-    UNKNOWN = "UNKNOWN"  # Fallback for new statuses
 
 
 class JobType(str, Enum):
@@ -38,7 +37,7 @@ class JobType(str, Enum):
     INCREMENTAL = "INCREMENTAL"
     HISTORICAL = "HISTORICAL"
     TRUNCATE_AND_LOAD = "TRUNCATE_AND_LOAD"
-    UNKNOWN = "UNKNOWN"  # Fallback for new job types
+    REFRESHER = "REFRESHER"
 
 
 class JobCompletionStatus(str, Enum):
@@ -78,8 +77,8 @@ class Job(BaseResponse):
     """
 
     job_id: str = Field(..., description="Unique job identifier (UUID)")
-    type: JobType | str = Field(..., description="Job type (INCREMENTAL, HISTORICAL, TRUNCATE_AND_LOAD)")
-    status: JobStatus | str = Field(..., description="Current job status")
+    type: Union[JobType, str] = Field(..., description="Job type (INCREMENTAL, HISTORICAL, TRUNCATE_AND_LOAD)")
+    status: Union[JobStatus, str] = Field(..., description="Current job status")
     created_ts: int = Field(..., description="Job creation timestamp in milliseconds since epoch")
     updated_ts: int = Field(..., description="Last update timestamp in milliseconds since epoch")
 
@@ -100,9 +99,9 @@ class Job(BaseResponse):
 
     # Performance metrics
     duration: int = Field(..., description="Execution time in milliseconds")
-    min_latency: int | None = Field(None, description="Minimum object-level latency in milliseconds")
-    max_latency: int | None = Field(None, description="Maximum object-level latency in milliseconds")
-    mean_latency: int | None = Field(None, description="Average latency across objects in milliseconds")
+    min_latency: Optional[int] = Field(None, description="Minimum object-level latency in milliseconds")
+    max_latency: Optional[int] = Field(None, description="Maximum object-level latency in milliseconds")
+    mean_latency: Optional[int] = Field(None, description="Average latency across objects in milliseconds")
 
     @field_validator("type", mode="before")
     @classmethod
@@ -110,8 +109,7 @@ class Job(BaseResponse):
         """
         Validate and normalize job type values.
 
-        If the API returns a new job type that doesn't exist in our enum,
-        log a warning and return JobType.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized job type.
         """
         if isinstance(value, JobType):
             return value
@@ -119,12 +117,14 @@ class Job(BaseResponse):
         # Try to match string value to known enum
         try:
             return JobType(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown job type '%s' received from API. Please update JobType enum. Defaulting to JobType.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown job type '{value}' received from Hevo API. "
+                f"Known types: {', '.join([t.value for t in JobType])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return JobType.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @field_validator("status", mode="before")
     @classmethod
@@ -132,8 +132,7 @@ class Job(BaseResponse):
         """
         Validate and normalize job status values.
 
-        If the API returns a new status that doesn't exist in our enum,
-        log a warning and return JobStatus.UNKNOWN to prevent breaking.
+        :raises ValueError: If the API returns an unrecognized job status.
         """
         if isinstance(value, JobStatus):
             return value
@@ -141,13 +140,14 @@ class Job(BaseResponse):
         # Try to match string value to known enum
         try:
             return JobStatus(str(value))
-        except ValueError:
-            logger.warning(
-                "Unknown job status '%s' received from API. Please update JobStatus enum. "
-                "Defaulting to JobStatus.UNKNOWN",
-                value,
+        except ValueError as e:
+            error_msg = (
+                f"Unknown job status '{value}' received from Hevo API. "
+                f"Known statuses: {', '.join([s.value for s in JobStatus])}. "
+                f"Check for the latest version of the airflow-hevo provider or reach out to Hevo support."
             )
-            return JobStatus.UNKNOWN
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @property
     def is_terminal(self) -> bool:
@@ -181,4 +181,4 @@ class PaginatedJobsResponse(BaseResponse):
 
     data: list[Job] = Field(..., description="List of jobs")
     has_more: bool = Field(..., description="Whether more results are available")
-    next_cursor: str | None = Field(None, description="Cursor for the next page of results")
+    next_cursor: Optional[str] = Field(None, description="Cursor for the next page of results")

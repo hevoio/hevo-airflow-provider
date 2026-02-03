@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from airflow.exceptions import AirflowException
 from airflow.triggers.base import BaseTrigger, TriggerEvent
@@ -44,9 +44,9 @@ class HevoTrigger(BaseTrigger):
         self,
         pipeline_id: int,
         connection_id: str = "hevo_airflow_conn_id",
-        job_id: str | None = None,
+        job_id: Optional[str] = None,
         job_type: JobType = JobType.INCREMENTAL,
-        poke_interval: int = 5,
+        poke_interval: int = 15,
         accept_completed_with_failures: bool = False,
     ) -> None:
         super().__init__()

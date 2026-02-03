@@ -14,6 +14,9 @@ USER root
 # Install system dependencies if needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    pkg-config \
+    default-libmysqlclient-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Switch back to airflow user
@@ -22,32 +25,22 @@ USER airflow
 # Set working directory
 WORKDIR /opt/airflow
 
+# Create directory for Airflow dag examples and ensure proper permissions
+RUN mkdir -p /opt/airflow/dag_examples /opt/airflow/logs
+
+
 # Copy Hevo provider source code
-COPY --chown=airflow:airflow ../../src /opt/hevo-airflow-provider/src
-COPY --chown=airflow:airflow ../../pyproject.toml /opt/hevo-airflow-provider/pyproject.toml
-COPY --chown=airflow:airflow ../../README.md /opt/hevo-airflow-provider/README.md
+COPY --chown=airflow:airflow src /opt/hevo-airflow-provider/src
+COPY --chown=airflow:airflow pyproject.toml /opt/hevo-airflow-provider/pyproject.toml
+COPY --chown=airflow:airflow README.md /opt/hevo-airflow-provider/README.md
+COPY --chown=airflow:airflow dag_examples/ ./dag_examples/
 
 # Copy requirements file
-COPY --chown=airflow:airflow requirements.txt ./requirements.txt
+COPY --chown=airflow:airflow docker/airflow-2.4/requirements.txt ./requirements.txt
 
 # Install additional dependencies and Hevo provider
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir -e /opt/hevo-airflow-provider
-
-# Copy example DAGs
-COPY --chown=airflow:airflow ../../dag_examples /opt/airflow/dag_examples
-
-# Initialize Airflow database
-RUN airflow db migrate
-
-# Create default admin user
-RUN airflow users create \
-        --username admin \
-        --firstname Admin \
-        --lastname User \
-        --role Admin \
-        --email admin@example.com \
-        --password admin
 
 # Expose Airflow webserver port
 EXPOSE 8080
@@ -57,4 +50,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD airflow jobs check --job-type SchedulerJob --hostname "$(hostname)"
 
 # Default command - run Airflow standalone
+# This will automatically initialize the database and create an admin user
 CMD ["airflow", "standalone"]

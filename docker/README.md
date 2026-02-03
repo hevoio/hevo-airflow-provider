@@ -8,13 +8,9 @@ This directory contains Docker configurations for running the Hevo Airflow Provi
 2. [Available Configurations](#available-configurations)
 3. [Quick Start](#quick-start)
 4. [Configuration](#configuration)
-5. [Understanding Operators vs Sensors](#understanding-operators-vs-sensors)
-6. [Configuration Parameters Reference](#configuration-parameters-reference)
-7. [Available Example DAGs](#available-example-dags)
-8. [Container Management](#container-management)
-9. [Development Workflow](#development-workflow)
-10. [Advanced Configuration](#advanced-configuration)
-11. [Troubleshooting](#troubleshooting)
+5. [Container Management](#container-management)
+6. [Development Workflow](#development-workflow)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -31,41 +27,173 @@ This Docker setup provides a complete, isolated Airflow environment with:
 
 Before starting, ensure you have:
 - Docker Engine 20.10+ installed ([Install Docker](https://docs.docker.com/get-docker/))
-- Docker Compose 2.0+ installed (bundled with Docker Desktop)
-- Your Hevo API credentials:
+- Your Hevo API credentials (Required):
   - API Username
   - API Key
   - Region endpoint (e.g., us.hevodata.com, eu.hevodata.com)
+- MySQL credentials (Optional - if using MySQL-based DAGs):
+  - MySQL host endpoint
+  - MySQL username and password
+  - Database/schema name
+- Snowflake credentials (Optional - if using Snowflake-based DAGs):
+  - Snowflake account identifier
+  - Username and password
+  - Warehouse, database, and role details
 
 ### 5-Minute Quick Setup
 
-1. **Navigate to your preferred Airflow version**:
+1. **Build the Docker image**:
    ```bash
-   cd docker/airflow-3.0/  # Or airflow-2.4/
+   # For Airflow 3.0
+   docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
+
+   # Or for Airflow 2.4
+   docker build -t hevo-airflow-2.4 -f docker/airflow-2.4/Dockerfile .
    ```
 
-2. **Configure Hevo credentials** in `docker-compose.yml`:
-   ```yaml
-   environment:
-     - AIRFLOW_CONN_HEVO_DEFAULT=http://your_username:your_api_key@region.hevodata.com
+2. **Start Airflow container**:
+
+   **Standard Mode** (for running DAGs):
+   ```bash
+   # For Airflow 3.0
+   docker run -d  \
+      --name hevo-airflow-3.0   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-3.0
+
+   # Or for Airflow 2.4
+   docker run -d \
+      --name hevo-airflow-2.4   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-2.4
    ```
 
-3. **Start Airflow**:
+   **Development Mode** (for modifying provider code - add source mount):
    ```bash
-   docker-compose up --build
+   # For Airflow 3.0 with source code mounted
+   docker run -d  \
+      --name hevo-airflow-3.0-dev   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./src:/opt/hevo-airflow-provider/src:rw   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-3.0
+
+   # Or for Airflow 2.4 with source code mounted
+   docker run -d  \
+      --name hevo-airflow-2.4-dev   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./src:/opt/hevo-airflow-provider/src:rw   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-2.4
+   ```
+
+   **Note**: Development mode mounts your local `src/` directory. Changes to hook files (like `base.py`) will be reflected after a simple container restart - no rebuild needed!
+
+3. **Get admin credentials**:
+   Watch the container logs to find the auto-generated password:
+   ```bash
+   # For Airflow 3.0
+   docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
+
+   # For Airflow 2.4
+   docker logs -f hevo-airflow-2.4 | grep -A 5 "admin"
+   ```
+
+   Look for output like:
+   ```
+   admin: Password <randomly-generated-password>
    ```
 
 4. **Access Airflow UI**:
    - Open http://localhost:8080
-   - Login: `admin` / `admin`
+   - Login with the admin username and password from the logs
 
-5. **Run your first DAG**:
+5. **Configure connections** in Airflow UI (Admin → Connections):
+
+   **a. Hevo Connection** (Required):
+   - Click Add → New connection
+   - Connection Id: `hevo_airflow_conn_id`
+   - Connection Type: `HTTP`
+   - Host: `us.hevodata.com` (or your region: `eu.hevodata.com`, `in.hevodata.com`, `ap.hevodata.com`)
+   - Schema: `https`
+   - Login: Your Hevo API username
+   - Password: Your Hevo API key
+   - Click Save
+
+   **b. MySQL Connection** (Optional - for MySQL-based DAGs):
+   - Click Add → New connection
+   - Connection Id: `mysql_default`
+   - Connection Type: `MySQL`
+   - Host: Your MySQL host endpoint (e.g., `localhost` or `mysql.example.com`)
+   - Login: Your MySQL username
+   - Password: Your MySQL password
+   - Port: `3306` (or your custom port)
+   - Schema: `airflow_x_hevo`
+   - Click Save
+
+   **c. Snowflake Connection** (Optional - for Snowflake-based DAGs):
+   - Click Add → New connection
+   - Connection Id: `snowflake_default`
+   - Connection Type: `Snowflake`
+   - Login: Your Snowflake username
+   - Password: Your Snowflake password
+   - Extra: Add the following JSON:
+     ```json
+     {
+       "account": "your_account_name",
+       "region": "your_region",
+       "warehouse": "your_warehouse",
+       "database": "your_database"
+     }
+     ```
+   - Click Save
+
+6. **Configure pipeline variable** in Airflow UI (Admin → Variables):
+   - Go to Admin → Variables
+   - Click "+" to add a new variable
+   - Key: `pipeline_id`
+   - Value: Your Hevo pipeline ID (e.g., `123`)
+   - Click Save
+
+   **Note**: You can find your pipeline ID in the Hevo dashboard URL or pipeline details page.
+
+7. **Run your first DAG**:
    - Enable the `triggerer_example_dag`
-   - Update the `pipeline_id` with your Hevo pipeline ID
+   - The DAG will automatically use the `pipeline_id` variable you configured
    - Click "Trigger DAG"
 
 That's it! You're now running Hevo pipelines from Airflow.
 
+
+### Stop Container
+```bash
+docker stop hevo-airflow-3.0
+# or
+docker stop hevo-airflow-2.4
+```
+
+### Restart Container
+```bash
+docker restart hevo-airflow-3.0
+# or
+docker restart hevo-airflow-2.4
+```
+
+### Remove Container and Volumes
+```bash
+# Stop and remove container
+docker stop hevo-airflow-3.0
+docker rm hevo-airflow-3.0
+
+# Remove persistent volume
+docker volume rm hevo-airflow-data
+```
 ---
 
 ## Available Configurations
@@ -86,299 +214,194 @@ That's it! You're now running Hevo pipelines from Airflow.
 
 ---
 
-## Quick Start
-
-### Prerequisites
-
-- Docker Engine 20.10+
-- Docker Compose 2.0+
-- Hevo API credentials (username and API key)
-
-### Option 1: Using Docker Compose (Recommended)
-
-#### For Airflow 2.4:
-```bash
-# Navigate to the Airflow 2.4 directory
-cd docker/airflow-2.4/
-
-# Update docker-compose.yml with your Hevo credentials (see Configuration section)
-# Build and start the container
-docker-compose up --build
-
-# Access Airflow UI at http://localhost:8080
-# Username: admin
-# Password: admin
-```
-
-#### For Airflow 3.0:
-```bash
-# Navigate to the Airflow 3.0 directory
-cd docker/airflow-3.0/
-
-# Update docker-compose.yml with your Hevo credentials (see Configuration section)
-# Build and start the container
-docker-compose up --build
-
-# Access Airflow UI at http://localhost:8080
-# Username: admin
-# Password: admin
-```
-
-### Option 2: Using Docker CLI
-
-#### For Airflow 2.4:
-```bash
-# Build the image
-docker build -t hevo-airflow-2.4 -f docker/airflow-2.4/Dockerfile .
-
-# Run the container
-docker run -d \
-  --name hevo-airflow-2.4 \
-  -p 8080:8080 \
-  -v $(pwd)/dags:/opt/airflow/dags \
-  -v $(pwd)/docker/airflow-2.4/logs:/opt/airflow/logs \
-  -e AIRFLOW_CONN_HEVO_DEFAULT=http://your_api_username:your_api_key@us.hevodata.com \
-  hevo-airflow-2.4
-```
-
-#### For Airflow 3.0:
-```bash
-# Build the image
-docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
-
-# Run the container
-docker run -d \
-  --name hevo-airflow-3.0 \
-  -p 8080:8080 \
-  -v $(pwd)/dags:/opt/airflow/dags \
-  -v $(pwd)/docker/airflow-3.0/logs:/opt/airflow/logs \
-  -e AIRFLOW_CONN_HEVO_DEFAULT=http://your_api_username:your_api_key@us.hevodata.com \
-  hevo-airflow-3.0
-```
-
-## Configuration
-
-### Basic Configuration
-
-#### Hevo Connection Setup
-
-Before running containers, configure your Hevo API credentials:
-
-**Method 1: Environment Variable** (Recommended for Docker):
-```yaml
-# In docker-compose.yml
-environment:
-  - AIRFLOW_CONN_HEVO_DEFAULT=http://your_api_username:your_api_key@us.hevodata.com
-```
-
-**Method 2: Airflow UI** (For manual setup):
-1. Access http://localhost:8080 → Admin → Connections
-2. Create connection:
-   - **Connection Id**: `hevo_default`
-   - **Connection Type**: HTTP
-   - **Host**: `us.hevodata.com` (or your region: `eu`, `in`, `ap`)
-   - **Schema**: `https`
-   - **Login**: Your API username
-   - **Password**: Your API key
-
-#### Port Configuration
-
-Change Airflow webserver port in `docker-compose.yml`:
-```yaml
-ports:
-  - "9090:8080"  # Host:Container
-```
-
-#### Pipeline IDs
-
-Update example DAG files with your Hevo pipeline IDs:
-```python
-# In dags/triggerer_example_dag.py
-trigger_sync = HevoOperator(
-    task_id="sync_pipeline",
-    pipeline_id=123,  # ← Replace with your pipeline ID
-    ...
-)
-```
-
-### Connection Configuration
-
-Create an Airflow connection with your Hevo credentials:
-
-**Via Environment Variable** (Docker Compose):
-```yaml
-environment:
-  - AIRFLOW_CONN_HEVO_DEFAULT=http://api_username:api_key@us.hevodata.com
-```
-
-**Via Airflow UI**:
-1. Go to Admin → Connections
-2. Create new connection:
-   - **Connection Id**: `hevo_default`
-   - **Connection Type**: HTTP
-   - **Host**: `us.hevodata.com` (or your region: `eu.hevodata.com`, `in.hevodata.com`)
-   - **Schema**: `https`
-   - **Login**: Your Hevo API username
-   - **Password**: Your Hevo API key
-
-**Via CLI**:
-```bash
-docker exec -it hevo-airflow-3.0 /bin/bash
-source /opt/airflow/.venv/bin/activate
-airflow connections add hevo_default \
-  --conn-type http \
-  --conn-host us.hevodata.com \
-  --conn-schema https \
-  --conn-login your_api_username \
-  --conn-password your_api_key
-```
-
-### Running Example DAGs
-
-**Step 1: Configure Pipeline IDs**
-```bash
-# Edit DAG files with your Hevo pipeline IDs
-vim dags/triggerer_example_dag.py
-# Change: pipeline_id=123  →  pipeline_id=YOUR_PIPELINE_ID
-```
-
-**Step 2: Access Airflow UI**
-- URL: http://localhost:8080
-- Username: `admin`
-- Password: `admin`
-
-**Step 3: Enable and Trigger DAG**
-1. Toggle the DAG switch to enable it
-2. Click "Trigger DAG" button (play icon)
-3. Monitor in Graph view or Grid view
-
-**Step 4: View Logs**
-- Click on task → View Log
-- Check for sync status and any errors
----
-
-## Container Management
-
-### View Container Logs
-```bash
-# Docker Compose
-docker-compose logs -f
-
-# Docker CLI
-docker logs -f hevo-airflow-2.4
-# or
-docker logs -f hevo-airflow-3.0
-```
-
-### Stop Container
-```bash
-# Docker Compose
-docker-compose down
-
-# Docker CLI
-docker stop hevo-airflow-2.4
-# or
-docker stop hevo-airflow-3.0
-```
-
-### Restart Container
-```bash
-# Docker Compose
-docker-compose restart
-
-# Docker CLI
-docker restart hevo-airflow-2.4
-# or
-docker restart hevo-airflow-3.0
-```
-
-### Remove Container and Volumes
-```bash
-# Docker Compose (removes volumes)
-docker-compose down -v
-
-# Docker CLI
-docker rm -f hevo-airflow-2.4
-docker volume rm airflow-db
-# or
-docker rm -f hevo-airflow-3.0
-docker volume rm airflow-db
-```
-
-### Shell Access
-```bash
-# Docker Compose
-docker-compose exec airflow /bin/bash
-
-# Docker CLI
-docker exec -it hevo-airflow-2.4 /bin/bash
-# or
-docker exec -it hevo-airflow-3.0 /bin/bash
-```
-
 ## Development Workflow
+
+> 📖 **For detailed development workflows, see [DEVELOPMENT.md](DEVELOPMENT.md)** - Complete guide with examples, troubleshooting, and pro tips!
+
+### TL;DR - Quick Answer
+
+**Question**: *"I changed `base.py` - do I need to rebuild?"*
+
+**Answer**: **NO** - if you started the container in **Development Mode** with source code mounted:
+```bash
+# Just restart the container
+docker restart hevo-airflow-3.0-dev
+```
+
+Changes to any file in `src/` will be reflected after restart. No rebuild needed!
+
+If you're using **Standard Mode** (no source mount), then yes, you need to rebuild.
+
+---
 
 ### Live DAG Development
 
 The DAGs directory is mounted as a volume, so changes to DAG files are automatically picked up by Airflow:
 
-1. Edit DAG files in `dags/` directory
+1. Edit DAG files in `dag_examples/` directory
 2. Wait 30 seconds for Airflow to detect changes
 3. Refresh the Airflow UI to see updates
 
-### Testing Local Changes
+### Testing Local Changes to Provider Code
 
-To test changes to the Hevo provider code:
+There are two approaches depending on your workflow:
 
-1. Make changes to the provider code in `src/`
-2. Rebuild the Docker image:
-   ```bash
-   docker-compose up --build
-   ```
-3. The provider will be reinstalled with your changes
+#### Option 1: Development Mode (Recommended for Active Development)
 
-### Debugging
+**Mount source code as a volume** - Changes are reflected immediately without rebuilding:
 
-#### View Airflow Logs
+**Step 1: Run container with source code mounted**
 ```bash
-# Container logs
-docker-compose logs -f airflow
-
-# Task logs via UI
-# Go to http://localhost:8080 → DAG → Task Instance → View Log
+docker run -d \
+      --name hevo-airflow-3.0   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./src:/opt/hevo-airflow-provider/src:rw   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-3.0
 ```
 
-#### Check Airflow Configuration
+**Key change**: Added `-v "$(pwd)/src:/opt/hevo-airflow-provider/src:rw"` to mount your local `src/` directory
+
+**Step 2: Make changes to hook files**
 ```bash
-docker exec -it hevo-airflow-2.4 /bin/bash
-source /opt/airflow/.venv/bin/activate
-airflow config list
+# Edit any file in src/
+vim src/airflow/hevo/hooks/base.py
 ```
 
-#### Test Hevo Connection
+**Step 3: Restart Airflow services** (no rebuild needed!)
+
+**Option A: Restart entire container** (easiest):
 ```bash
-docker exec -it hevo-airflow-2.4 /bin/bash
-source /opt/airflow/.venv/bin/activate
-airflow connections get hevo_default
+docker restart hevo-airflow-3.0-dev
 ```
 
-## Advanced Configuration
-
-### Custom Airflow Configuration
-
-You can override Airflow configuration via environment variables in `docker-compose.yml`:
-
-```yaml
-environment:
-  - AIRFLOW__CORE__PARALLELISM=32
-  - AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=16
-  - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+**Option B: Restart Airflow processes only** (faster):
+```bash
+docker exec hevo-airflow-3.0-dev pkill -f "airflow"
+# Airflow standalone will auto-restart
 ```
 
--------
+**Option C: Restart specific components**:
+```bash
+# For webserver changes
+docker exec hevo-airflow-3.0-dev pkill -f "airflow webserver"
+
+# For scheduler/worker changes (where your hooks run)
+docker exec hevo-airflow-3.0-dev pkill -f "airflow scheduler"
+```
+
+**Advantages**:
+- ✅ No rebuild needed for code changes
+- ✅ Instant feedback loop
+- ✅ Great for debugging and iterating
+- ✅ See changes by just restarting container
+
+**Notes**:
+- Python bytecode (`.pyc` files) may be cached - restart container to clear
+- The provider is installed in editable mode (`pip install -e`), so changes are reflected immediately
+- Works because the source directory is mounted from your host machine
+
+#### Option 2: Production Mode (Rebuild for Each Change)
+
+**Build source code into the image** - More stable but requires rebuild:
+
+**Step 1: Make changes to provider code**
+```bash
+vim src/airflow/hevo/hooks/base.py
+```
+
+**Step 2: Rebuild the Docker image**
+```bash
+docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
+```
+
+**Step 3: Stop and remove old container**
+```bash
+docker stop hevo-airflow-3.0
+docker rm hevo-airflow-3.0
+```
+
+**Step 4: Start new container**
+```bash
+docker run -d \
+      --name hevo-airflow-3.0   \
+      -p 8080:8080   \
+      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
+      -v ./src:/opt/hevo-airflow-provider/src:rw   \
+      -v ./dag_examples:/opt/airflow/dag_examples   \
+      hevo-airflow-3.0
+```
+
+**Advantages**:
+- ✅ Code is baked into image (no external dependencies)
+- ✅ Identical to production deployment
+- ✅ Can share image without source code
+
+**Use this approach when**:
+- Testing final builds before release
+- Deploying to production
+- Sharing images with others
+
+### Quick Comparison
+
+| Aspect | Development Mode | Production Mode |
+|--------|------------------|-----------------|
+| **Source code location** | Mounted from host | Built into image |
+| **Rebuild required?** | ❌ No | ✅ Yes |
+| **Restart to apply changes?** | ✅ Yes (just restart) | ✅ Yes (after rebuild) |
+| **Best for** | Active development | Testing/Production |
+| **Change feedback** | Seconds | Minutes |
+
 ## Troubleshooting
 
-#### Problem: Authentication Failed
+#### Problem: Can't Find Admin Password
+
+**Symptoms**:
+```
+Don't know the admin password for Airflow UI
+```
+
+**Solutions**:
+
+**Search container logs**
+```bash
+# View all logs and search for admin credentials
+docker logs hevo-airflow-3.0 | grep -A 5 "Admin User"
+```
+
+**Note**: The credentials are only displayed once during the first container startup.
+
+#### Problem: Container Exits Immediately
+
+**Symptoms**:
+```
+Container starts but exits immediately
+```
+
+**Solutions**:
+1. **Check container logs**:
+   ```bash
+   docker logs hevo-airflow-3.0
+   ```
+
+2. **Verify volume paths exist**:
+   ```bash
+   # Make sure these directories exist
+   mkdir -p dag_examples
+   mkdir -p docker/airflow-3.0/logs
+   ```
+
+3. **Run in foreground for debugging**:
+   ```bash
+   # Remove -d flag to see output directly
+   docker run \
+     --name hevo-airflow-3.0-debug \
+     # ... rest of flags
+     hevo-airflow-3.0
+   ```
+   
+#### Problem: Hevo API Authentication Failed
 
 **Symptoms**:
 ```
@@ -411,165 +434,78 @@ Pipeline 456 not found
 
 **Solutions**:
 1. Verify pipeline ID is correct in your Hevo dashboard
-2. Check pipeline status in Hevo UI (must be INITIALIZED)
+2. Check pipeline status in Hevo UI (must be INITIALIZED for SYNC_NOW action)
 3. Ensure you have access permissions to the pipeline
 4. Use correct connection for the pipeline's region
 
-#### Problem: Job Not Found After Triggering
+#### Problem: MySQL Connection Failed
 
 **Symptoms**:
 ```
-No active job found after 10 attempts
+Can't connect to MySQL server on 'host'
+Access denied for user 'username'@'host'
 ```
 
 **Solutions**:
-1. Increase `retry_limit` in operator:
-   ```python
-   HevoOperator(
-       pipeline_id=123,
-       retry_limit=20,  # Increased from default 10
-       ...
-   )
-   ```
-
-2. Check if pipeline is already running a job
-3. Verify `job_type` matches what the pipeline supports
-4. Check Hevo dashboard to confirm sync was triggered
-
-#### Problem: Deferrable Tasks Not Working
-
-**Symptoms**:
-```
-Task stuck in deferred state
-No triggerer service available
-```
-
-**Solutions**:
-1. Verify triggerer is running in standalone mode (included by default)
-2. Check triggerer logs:
+1. **Verify MySQL connection details**:
    ```bash
-   docker-compose logs | grep triggerer
+   docker exec hevo-airflow-3.0 airflow connections get mysql_default
    ```
 
-3. For separate triggerer, ensure it's configured in docker-compose.yml
-4. Fallback to synchronous mode if triggerer unavailable:
-   ```python
-   HevoOperator(
-       pipeline_id=123,
-       deferrable=False,  # Use synchronous mode
-       ...
-   )
-   ```
-
-#### Problem: Task Timeout
-
-**Symptoms**:
-```
-Task exceeded timeout of 3600 seconds
-```
-
-**Solutions**:
-1. Increase sensor timeout:
-   ```python
-   HevoSensor(
-       pipeline_id=123,
-       timeout=7200,  # 2 hours
-       ...
-   )
-   ```
-
-2. Adjust poll interval for less frequent checks:
-   ```python
-   HevoOperator(
-       pipeline_id=123,
-       poll_interval=30,  # Check every 30 seconds instead of 5
-       ...
-   )
-   ```
-
-3. Check if pipeline is actually stuck in Hevo dashboard
-
-#### Problem: Partial Failures Causing Task Failure
-
-**Symptoms**:
-```
-Job completed with failures - some records failed
-```
-
-**Solutions**:
-Accept partial failures if acceptable for your use case:
-```python
-HevoOperator(
-    pipeline_id=123,
-    accept_completed_with_failures=True,  # Don't fail on partial failures
-    ...
-)
-```
-
-### Container Issues
-
-#### Container Won't Start
-
-**Check logs:**
-```bash
-docker-compose logs
-```
-
-**Common issues:**
-- Port 8080 already in use → Change port in docker-compose.yml
-- Insufficient memory → Increase Docker memory allocation (Settings → Resources)
-- Build failures → Check system dependencies are installed
-
-#### DAGs Not Appearing
-
-1. Check DAG folder is correctly mounted:
-   ```bash
-   docker exec -it hevo-airflow-3.0 ls -la /opt/airflow/dags
-   ```
-
-2. Check for DAG import errors:
+2. **Test connection from container**:
    ```bash
    docker exec -it hevo-airflow-3.0 /bin/bash
-   source /opt/airflow/.venv/bin/activate
-   airflow dags list-import-errors
+   mysql -h your_mysql_host -u your_username -p -P 3306
    ```
 
-3. Check DAG file syntax:
+3. **Check MySQL host accessibility**:
+   - If MySQL is on `localhost`, use `host.docker.internal` (Mac/Windows) or `172.17.0.1` (Linux) instead
+   - Ensure MySQL is configured to accept remote connections
+   - Check firewall rules allow connections on port 3306
+
+4. **Verify user permissions**:
+   ```sql
+   -- Run this on your MySQL server
+   GRANT ALL PRIVILEGES ON airflow_x_hevo.* TO 'your_username'@'%';
+   FLUSH PRIVILEGES;
+   ```
+
+5. **Create schema if it doesn't exist**:
+   ```sql
+   CREATE DATABASE IF NOT EXISTS airflow_x_hevo;
+   ```
+
+#### Problem: Snowflake Connection Failed
+
+**Symptoms**:
+```
+Failed to connect to DB: account.snowflakecomputing.com:443
+250001: Could not connect to Snowflake backend
+Invalid username or password
+```
+
+**Solutions**:
+1. **Verify Snowflake connection**:
    ```bash
-   docker exec -it hevo-airflow-3.0 /bin/bash
-   source /opt/airflow/.venv/bin/activate
-   python /opt/airflow/dags/your_dag.py
+   docker exec hevo-airflow-3.0 airflow connections get snowflake_default
    ```
 
-#### Performance Issues
+2. **Check account identifier format**:
+   - Format: `{account_name}.{region_id}` or `{account_locator}.{cloud_region_id}.{cloud}`
+   - Example: `xy12345.us-east-1` or `abc12345.us-east-1.aws`
+   - Don't include `.snowflakecomputing.com` in the account field
 
-1. **Increase worker resources** in docker-compose.yml:
-   ```yaml
-   deploy:
-     resources:
-       limits:
-         cpus: '2.0'
-         memory: 4G
+3. **Verify Extra JSON format**:
+   ```json
+   {
+     "account": "your_account_identifier",
+     "region": "us-east-1",
+     "warehouse": "COMPUTE_WH",
+     "database": "YOUR_DATABASE"
+   }
    ```
 
-2. **Use LocalExecutor** (already default) instead of SequentialExecutor
-
-3. **Reduce DAG parsing frequency**:
-   ```yaml
-   environment:
-     - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=300  # 5 minutes
-   ```
-
-4. **Increase parallelism**:
-   ```yaml
-   environment:
-     - AIRFLOW__CORE__PARALLELISM=32
-     - AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=16
-   ```
-
-### Provider-Specific Issues
-
-#### Import Errors
+#### Problem: Provider Module Not Found
 
 **Symptoms**:
 ```python
@@ -577,146 +513,130 @@ ModuleNotFoundError: No module named 'airflow.hevo'
 ```
 
 **Solutions**:
-1. Verify provider is installed:
+1. **Verify provider is installed**:
    ```bash
-   docker exec -it hevo-airflow-3.0 /bin/bash
-   source /opt/airflow/.venv/bin/activate
-   pip list | grep hevo
+   docker exec hevo-airflow-3.0 pip list | grep hevo
    ```
 
-2. Rebuild container if provider was updated:
+2. **Rebuild container if provider was updated**:
    ```bash
-   docker-compose down
-   docker-compose up --build
+   docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
+   docker stop hevo-airflow-3.0
+   docker rm hevo-airflow-3.0
+   # Then run the container again
    ```
 
-#### API Rate Limiting
+---
+
+#### Problem: Code Changes Not Reflected (Development Mode)
 
 **Symptoms**:
 ```
-429 Too Many Requests
+Made changes to base.py but they don't appear when running DAGs
+Changes to hook files not taking effect
 ```
 
 **Solutions**:
-1. Configure retry with exponential backoff in hook:
-   ```python
-   from airflow.hevo.hooks import HevoPipelineHook
 
-   hook = HevoPipelineHook(
-       pipeline_id=123,
-       retry_limit=5,
-       retry_delay=5,
-       retryable_status_codes=[429, 500, 502, 503]  # Include 429
-   )
-   ```
-
-2. Increase poll intervals to reduce API calls:
-   ```python
-   HevoOperator(
-       pipeline_id=123,
-       poll_interval=60,  # Check every minute instead of 5 seconds
-       ...
-   )
-   ```
-
-3. Contact Hevo support to increase rate limits
-
-### Getting Help
-
-If you're still experiencing issues:
-
-1. **Check Logs**:
-   - Container logs: `docker-compose logs -f`
-   - Task logs: Airflow UI → Task → View Log
-   - Airflow logs: `/opt/airflow/logs/`
-
-2. **Enable Debug Logging**:
-   ```yaml
-   environment:
-     - AIRFLOW__LOGGING__LOGGING_LEVEL=DEBUG
-   ```
-
-3. **Test Connection**:
+1. **Verify source code is mounted**:
    ```bash
-   docker exec -it hevo-airflow-3.0 /bin/bash
-   source /opt/airflow/.venv/bin/activate
-   python -c "
-   from airflow.hevo.hooks import HevoPipelineHook
-   hook = HevoPipelineHook(connection_id='hevo_default')
-   print(hook.get_connection())
-   "
+   docker inspect hevo-airflow-3.0-dev | grep -A 5 "Mounts"
+   ```
+   Look for `/opt/hevo-airflow-provider/src` in the output
+
+2. **Check you started container in development mode**:
+   ```bash
+   # Container should have been started with source mount:
+   # -v "$(pwd)/src:/opt/hevo-airflow-provider/src:rw"
    ```
 
-4. **Check Provider Documentation**:
-   - Main README: `../README.md`
-   - Configuration: `../CONFIGURATION_PARAMETERS.md`
-   - Claude guidance: `../CLAUDE.md`
+3. **Restart container to clear Python cache**:
+   ```bash
+   docker restart hevo-airflow-3.0-dev
+   ```
 
-5. **Report Issues**:
-   - Check existing issues on GitHub
-   - Provide full error logs and configuration
-   - Include Airflow/Python versions
+4. **Or restart Airflow scheduler only** (faster):
+   ```bash
+   # Changes to hooks/operators require scheduler restart
+   docker exec hevo-airflow-3.0-dev pkill -f "airflow scheduler"
+   # Wait 5 seconds for auto-restart, then trigger your DAG
+   ```
 
-## CI/CD Integration
+5. **Clear Python bytecode cache**:
+   ```bash
+   # Remove .pyc files from mounted directory
+   find src/ -type f -name "*.pyc" -delete
+   find src/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-### GitHub Actions Example
+   # Then restart container
+   docker restart hevo-airflow-3.0-dev
+   ```
 
-```yaml
-name: Test Hevo Provider
+6. **Verify editable install is active**:
+   ```bash
+   docker exec hevo-airflow-3.0-dev pip show hevo-airflow-provider
+   # Look for: Location: /opt/hevo-airflow-provider
+   # Look for: Editable project location: /opt/hevo-airflow-provider
+   ```
 
-on: [push, pull_request]
+7. **Test your changes**:
+   ```bash
+   # Access container and import your module
+   docker exec -it hevo-airflow-3.0-dev python -c "
+   from airflow.hevo.hooks.base import BaseHevoHook
+   print('Import successful!')
+   print(BaseHevoHook.__file__)
+   "
+   # Should show: /opt/hevo-airflow-provider/src/airflow/hevo/hooks/base.py
+   ```
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        airflow-version: ['2.4', '3.0']
+**Common Mistakes**:
+- Started container in Standard Mode instead of Development Mode (missing source mount)
+- Changed file but didn't restart Airflow processes
+- Edited file outside the container (not in the mounted `src/` directory)
+- Python cached the old `.pyc` files
 
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build Docker image
-        run: |
-          docker build -t hevo-airflow-${{ matrix.airflow-version }} \
-            -f docker/airflow-${{ matrix.airflow-version }}/Dockerfile .
-
-      - name: Run tests
-        run: |
-          docker run --rm hevo-airflow-${{ matrix.airflow-version }} \
-            /bin/bash -c "source /opt/airflow/.venv/bin/activate && pytest tests/"
-```
-
-## Quick Reference
-
-### Common Commands
-
+**Quick Development Workflow**:
 ```bash
-# Start Airflow
-cd docker/airflow-3.0/
-docker-compose up --build
+# 1. Edit your hook file
+vim src/airflow/hevo/hooks/base.py
 
-# Stop Airflow
-docker-compose down
+# 2. Restart container (clears all caches)
+docker restart hevo-airflow-3.0-dev
 
-# View logs
-docker-compose logs -f
+# 3. Wait for container to be healthy (30-60 seconds)
+docker logs -f hevo-airflow-3.0-dev
 
-# Access shell
-docker exec -it hevo-airflow-3.0 /bin/bash
-
-# Rebuild after code changes
-docker-compose up --build
-
-# Clean restart
-docker-compose down -v && docker-compose up --build
+# 4. Test your changes by triggering a DAG
 ```
+
+---
 
 ### Configuration Checklist
 
-- [ ] Docker and Docker Compose installed
+#### For All Users
+- [ ] Docker Engine installed (20.10+)
 - [ ] Hevo API credentials obtained (username + API key)
-- [ ] Updated `AIRFLOW_CONN_HEVO_DEFAULT` in `docker-compose.yml`
-- [ ] Updated pipeline IDs in example DAG files
-- [ ] Allocated at least 4GB RAM to Docker
-- [ ] Port 8080 available (or changed in config)
+- [ ] Docker image built successfully
+
+#### Container Startup (Choose One)
+- [ ] **Standard Mode**: Container started for running DAGs
+- [ ] **Development Mode**: Container started with source mounted (`-v ./src:/opt/hevo-airflow-provider/src:rw`)
+
+#### Post-Startup Configuration
+- [ ] Container started with correct user permissions (`--user "$(id -u):0"`)
+- [ ] Admin credentials retrieved from container logs
+- [ ] **Hevo connection** configured in Airflow UI (Admin → Connections) - **Required**
+- [ ] MySQL connection configured (if using MySQL-based DAGs) - Optional
+- [ ] Snowflake connection configured (if using Snowflake-based DAGs) - Optional
+- [ ] Pipeline IDs updated in example DAG files
+- [ ] Port 8080 available (or changed in run command)
+- [ ] At least 4GB RAM allocated to Docker
+
+### Helpful Resources
+
+- **Development Guide**: See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development workflows
+- **Airflow Documentation**: https://airflow.apache.org/docs/
+- **Hevo API Documentation**: https://hevo-edge.readme.io/reference
+- **Provider Documentation**: See main README.md in repository root
+- **Docker Documentation**: https://docs.docker.com/

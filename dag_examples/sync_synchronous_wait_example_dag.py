@@ -84,7 +84,7 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
     if not batch_id:
         return
 
-    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default_latest", warehouse="HOGWARTS", database="RON")
+    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON")
 
     query = """
     SELECT id, batch_id, generated_at, value_int, value_text, payload

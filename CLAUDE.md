@@ -164,7 +164,9 @@ HevoPipelineOperator(
 )
 ```
 - Triggers full historical resync: `POST /api/v1/pipelines/{id}/actions/resync`
-- **No validation required** - can be triggered on any pipeline
+- **Waits for INITIALIZED state** - polls pipeline status with infinite retries until INITIALIZED
+- Uses `poll_interval` parameter for wait time between status checks (default: 15 seconds)
+- **No retry limit** - will wait indefinitely until pipeline reaches INITIALIZED status
 - Re-ingests all data from the source (complete historical reload)
 - Ignores `ensure_new_job` parameter
 - **Default job type**: `TRUNCATE_AND_LOAD`
@@ -178,7 +180,10 @@ HevoPipelineOperator(
 **Key Differences**:
 | Feature | SYNC_NOW | RESYNC |
 |---------|----------|--------|
-| Validation | Required (INITIALIZED state) | Not required |
+| Validation | Required (INITIALIZED state) | Waits for INITIALIZED (infinite retries) |
+| Validation Behavior | Immediate check, fails if not INITIALIZED | Polls until INITIALIZED, never fails |
+| Poll Interval | N/A | Uses `poll_interval` parameter |
+| Retry Limit | N/A | No limit (waits indefinitely) |
 | Data Scope | Incremental updates | Full historical reload |
 | Duration | Minutes | Hours (depends on data volume) |
 | API Endpoint | `/actions/sync-now` | `/actions/resync` |
@@ -643,13 +648,31 @@ docker/                           # Docker setup for local testing
 
 ### Pipeline State Validation
 
-Always validate pipeline is in `INITIALIZED` state before triggering SYNC_NOW:
+**SYNC_NOW Action:**
+Validates pipeline is in `INITIALIZED` state (single check, fails immediately if not):
 
 ```python
 hook.validate_pipeline(pipeline_id)
 # Raises AirflowException if not INITIALIZED
-# Note: RESYNC action does not require validation
 ```
+
+**RESYNC Action:**
+Automatically waits for pipeline to reach `INITIALIZED` state with infinite retries:
+
+```python
+# No manual validation needed - operator handles it automatically
+HevoPipelineOperator(
+    action=PipelineAction.RESYNC,
+    poll_interval=15,  # Seconds between INITIALIZED status checks
+    # Will poll indefinitely until pipeline is INITIALIZED
+)
+```
+
+The operator will:
+1. Check pipeline status
+2. If not INITIALIZED, wait `poll_interval` seconds
+3. Retry indefinitely until INITIALIZED
+4. Then trigger the resync
 
 ### Job Type Consistency
 

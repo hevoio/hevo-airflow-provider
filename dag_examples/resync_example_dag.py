@@ -79,7 +79,7 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
         return
 
     snowflake_hook = SnowflakeHook(
-        snowflake_conn_id="snowflake_default_latest", warehouse="HOGWARTS", database="RON"
+        snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON"
     )
 
     query = """
@@ -129,7 +129,7 @@ load_data_task = PythonOperator(
 resync_deferrable = HevoPipelineOperator(
     task_id="resync_pipeline_deferrable",
     connection_id="hevo_airflow_conn_id",
-    pipeline_id="{{ var.value.pipeline_id_1 }}",
+    pipeline_id="{{ var.value.pipeline_id }}",
     action=PipelineAction.RESYNC,  # Trigger full historical resync
     deferrable=True,  # Release worker slot (requires triggerer)
     wait_for_completion=True,  # Wait for job to complete

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import cached_property
 from time import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from airflow.exceptions import AirflowException
 from airflow.sensors.base import BaseSensorOperator
@@ -66,9 +66,9 @@ class HevoSensor(BaseSensorOperator):
         self,
         pipeline_id: int,
         connection_id: str = "hevo_airflow_conn_id",
-        job_id: str | None = None,
+        job_id: Optional[str] = None,
         job_type: JobType = JobType.INCREMENTAL,
-        poke_interval: int = 5,
+        poke_interval: int = 20,
         accept_completed_with_failures: bool = False,
         deferrable: bool = True,
         wait_for_job_max_attempts: int = 10,

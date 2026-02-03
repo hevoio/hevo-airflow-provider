@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from airflow.hevo.models.job import (
     Job,
     JobCompletionStatus,
@@ -39,13 +42,6 @@ class TestJobEnums:
         assert JobCompletionStatus.FAILED == "failed"
         assert JobCompletionStatus.PENDING == "pending"
 
-    def test_job_status_unknown_enum_exists(self) -> None:
-        """Test UNKNOWN enum value exists for JobStatus."""
-        assert JobStatus.UNKNOWN == "UNKNOWN"
-
-    def test_job_type_unknown_enum_exists(self) -> None:
-        """Test UNKNOWN enum value exists for JobType."""
-        assert JobType.UNKNOWN == "UNKNOWN"
 
 
 class TestJobModel:
@@ -128,42 +124,43 @@ class TestJobModel:
         assert job.is_failed is True
 
     def test_job_with_unknown_status_from_api(self, sample_job_response) -> None:
-        """Test that unknown status values from API are handled gracefully."""
+        """Test that unknown status values from API raise an exception."""
         data = sample_job_response.copy()
         data["status"] = "NEW_STATUS_FROM_API"
 
-        job = Job(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert job.status == JobStatus.UNKNOWN
+        with pytest.raises(ValidationError) as exc_info:
+            Job(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_STATUS_FROM_API" in error_str
+        assert "Unknown job status" in error_str
 
     def test_job_with_unknown_type_from_api(self, sample_job_response) -> None:
-        """Test that unknown job type values from API are handled gracefully."""
+        """Test that unknown job type values from API raise an exception."""
         data = sample_job_response.copy()
         data["type"] = "NEW_JOB_TYPE"
 
-        job = Job(**data)
-        # Should be converted to UNKNOWN instead of raising an error
-        assert job.type == JobType.UNKNOWN
-        assert job.status == JobStatus.IN_PROGRESS
+        with pytest.raises(ValidationError) as exc_info:
+            Job(**data)
+
+        # Verify the error message contains helpful information
+        error_str = str(exc_info.value)
+        assert "NEW_JOB_TYPE" in error_str
+        assert "Unknown job type" in error_str
 
     def test_job_with_both_unknown_type_and_status(self, sample_job_response) -> None:
-        """Test that both unknown type and status are handled together."""
+        """Test that unknown type raises an exception (status validation not reached)."""
         data = sample_job_response.copy()
         data["type"] = "FUTURE_TYPE"
         data["status"] = "FUTURE_STATUS"
 
-        job = Job(**data)
-        assert job.type == JobType.UNKNOWN
-        assert job.status == JobStatus.UNKNOWN
+        with pytest.raises(ValidationError) as exc_info:
+            Job(**data)
 
-    def test_job_unknown_status_is_not_terminal(self, sample_job_response) -> None:
-        """Test that jobs with UNKNOWN status are not considered terminal."""
-        data = sample_job_response.copy()
-        data["status"] = "UNKNOWN"
-
-        job = Job(**data)
-        # UNKNOWN should not be in terminal states - we should keep monitoring
-        assert job.is_terminal is False
+        # The validation will fail on the first unknown field (type)
+        error_str = str(exc_info.value)
+        assert "Unknown" in error_str
 
 
 class TestPaginatedJobsResponse:

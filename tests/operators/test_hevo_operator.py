@@ -8,7 +8,7 @@ import pytest
 from airflow.exceptions import AirflowException, TaskDeferred
 
 from airflow.hevo.models.job import Job, JobCompletionStatus, JobType
-from airflow.hevo.models.pipeline import PipelineAction
+from airflow.hevo.models.pipeline import Pipeline, PipelineAction, PipelineStatus
 from airflow.hevo.operators import HevoPipelineOperator
 
 
@@ -22,7 +22,7 @@ class TestHevoOperatorInit:
         assert op.action == PipelineAction.SYNC_NOW
         assert op.job_type == JobType.INCREMENTAL
         assert op.connection_id == "test_conn"
-        assert op.poll_interval == 5
+        assert op.poll_interval == 15
         assert op.retry_limit == 10
         assert op.deferrable is True
         assert op.wait_for_completion is True
@@ -372,6 +372,11 @@ class TestHevoOperatorResyncAction:
         mock_hook.resync_pipeline_sync.return_value = None
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -423,6 +428,11 @@ class TestHevoOperatorResyncAction:
         mock_hook.resync_pipeline_sync.return_value = None
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -454,6 +464,11 @@ class TestHevoOperatorResyncAction:
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -478,6 +493,11 @@ class TestHevoOperatorResyncAction:
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.side_effect = AirflowException("Resync failed")
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -496,6 +516,11 @@ class TestHevoOperatorResyncAction:
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
+
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
         op = HevoPipelineOperator(
             task_id="test_task",
@@ -521,6 +546,11 @@ class TestHevoOperatorResyncAction:
         # Return a job with TRUNCATE_AND_LOAD type
         truncate_job = {**sample_job_response, "type": "TRUNCATE_AND_LOAD"}
         mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
+
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
         # Don't specify job_type - should default to TRUNCATE_AND_LOAD for RESYNC
         op = HevoPipelineOperator(
@@ -575,6 +605,11 @@ class TestHevoOperatorResyncAction:
         incremental_job = {**sample_job_response, "type": "INCREMENTAL"}
         mock_hook.find_active_job_by_type_sync.return_value = Job(**incremental_job)
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         # Explicitly set job_type to INCREMENTAL (override default)
         op = HevoPipelineOperator(
             task_id="test_task",
@@ -601,6 +636,11 @@ class TestHevoOperatorResyncAction:
         mock_hook.resync_pipeline_sync.return_value = None
         truncate_job = {**sample_job_response, "type": "TRUNCATE_AND_LOAD"}
         mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
+
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
         op = HevoPipelineOperator(
             task_id="test_task",
@@ -634,6 +674,11 @@ class TestHevoOperatorResyncAction:
         mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED
 
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -651,6 +696,128 @@ class TestHevoOperatorResyncAction:
         mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
         mock_hook.get_job_completion_status_sync.assert_called_once()
         assert result == truncate_job["job_id"]
+
+
+    def test_resync_waits_for_pipeline_initialized(
+        self, mock_hook_class, mock_airflow_context, sample_job_response, sample_pipeline_response
+    ) -> None:
+        """Test RESYNC action waits for pipeline to reach INITIALIZED status before triggering."""
+        from airflow.hevo.models.pipeline import Pipeline, PipelineStatus
+
+        mock_hook = MagicMock()
+        mock_hook_class.return_value = mock_hook
+
+        # Simulate pipeline in RESTARTING state, then INITIALIZED after some polls
+        pipeline_restarting = Pipeline(**{**sample_pipeline_response, "status": "RESTARTING"})
+        pipeline_initialized = Pipeline(**{**sample_pipeline_response, "status": "INITIALIZED"})
+
+        # First two calls return RESTARTING, third call returns INITIALIZED
+        mock_hook.get_pipeline_sync.side_effect = [
+            pipeline_restarting,
+            pipeline_restarting,
+            pipeline_initialized,
+        ]
+
+        mock_hook.resync_pipeline_sync.return_value = None
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
+
+        op = HevoPipelineOperator(
+            task_id="test_task",
+            connection_id="test_conn",
+            pipeline_id=123,
+            action=PipelineAction.RESYNC,
+            poll_interval=1,  # Short interval for test
+            wait_for_completion=False,
+        )
+
+        with patch("airflow.hevo.operators.sleep") as mock_sleep:
+            result = op.execute(mock_airflow_context)
+
+        # Verify pipeline status was checked 3 times (2 RESTARTING, 1 INITIALIZED)
+        assert mock_hook.get_pipeline_sync.call_count == 3
+        mock_hook.get_pipeline_sync.assert_called_with(123)
+
+        # Verify sleep was called 2 times (once for each RESTARTING status)
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_called_with(1)  # poll_interval
+
+        # Verify resync was called after pipeline became INITIALIZED
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+
+        # Should NOT call validate_pipeline for RESYNC action
+        mock_hook.validate_pipeline.assert_not_called()
+
+        assert result == "550e8400-e29b-41d4-a716-446655440001"
+
+    def test_resync_waits_indefinitely_for_pipeline_initialized(
+        self, mock_hook_class, mock_airflow_context, sample_job_response, sample_pipeline_response
+    ) -> None:
+        """Test RESYNC action has no retry limit when waiting for INITIALIZED status."""
+        from airflow.hevo.models.pipeline import Pipeline
+
+        mock_hook = MagicMock()
+        mock_hook_class.return_value = mock_hook
+
+        # Simulate pipeline staying in RESTARTING state for 50 attempts
+        pipeline_restarting = Pipeline(**{**sample_pipeline_response, "status": "RESTARTING"})
+        pipeline_initialized = Pipeline(**{**sample_pipeline_response, "status": "INITIALIZED"})
+
+        # Return RESTARTING 50 times, then INITIALIZED
+        side_effects = [pipeline_restarting] * 50 + [pipeline_initialized]
+        mock_hook.get_pipeline_sync.side_effect = side_effects
+
+        mock_hook.resync_pipeline_sync.return_value = None
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
+
+        op = HevoPipelineOperator(
+            task_id="test_task",
+            connection_id="test_conn",
+            pipeline_id=123,
+            action=PipelineAction.RESYNC,
+            poll_interval=1,
+            wait_for_completion=False,
+        )
+
+        with patch("airflow.hevo.operators.sleep") as mock_sleep:
+            result = op.execute(mock_airflow_context)
+
+        # Verify pipeline status was checked 51 times (no retry limit)
+        assert mock_hook.get_pipeline_sync.call_count == 51
+
+        # Verify sleep was called 50 times
+        assert mock_sleep.call_count == 50
+
+        # Verify resync was eventually called
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+
+        assert result == "550e8400-e29b-41d4-a716-446655440001"
+
+    def test_resync_raises_when_pipeline_not_found(
+        self, mock_hook_class, mock_airflow_context
+    ) -> None:
+        """Test RESYNC action raises when pipeline does not exist."""
+        mock_hook = MagicMock()
+        mock_hook_class.return_value = mock_hook
+
+        # Simulate pipeline not found
+        mock_hook.get_pipeline_sync.return_value = None
+
+        op = HevoPipelineOperator(
+            task_id="test_task",
+            connection_id="test_conn",
+            pipeline_id=999,
+            action=PipelineAction.RESYNC,
+            poll_interval=1,
+        )
+
+        with pytest.raises(AirflowException, match="Pipeline 999 does not exist"):
+            op.execute(mock_airflow_context)
+
+        # Verify we tried to get pipeline status
+        mock_hook.get_pipeline_sync.assert_called_once_with(999)
+
+        # Verify resync was never called
+        mock_hook.resync_pipeline_sync.assert_not_called()
 
 
 @patch("airflow.hevo.operators.HevoPipelineHook")

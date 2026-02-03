@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Optional
 
 from airflow.exceptions import AirflowException
 
@@ -50,7 +50,6 @@ class HevoPipelineHook(BaseHevoHook):
         :returns: Pipeline model with all details, or ``None`` if pipeline not found (404).
         :raises AirflowException: For non-404 API errors (auth, network, server errors).
         """
-        self.log.info("Fetching pipeline details for pipeline_id=%s", pipeline_id)
         try:
             response = await self.execute_api_request_async(method="GET", endpoint=f"/api/v1/pipelines/{pipeline_id}")
             return Pipeline(**response)
@@ -69,7 +68,7 @@ class HevoPipelineHook(BaseHevoHook):
 
         Checks that:
         1. Pipeline exists in Hevo (returns valid Pipeline model)
-        2. Pipeline status is INITIALIZED (not PAUSED, STOPPED, FAILED, or INCOMPLETE)
+        2. Pipeline status is INITIALIZED
 
         This validation should be called before triggering a sync to ensure the
         pipeline is ready to accept sync requests.
@@ -131,7 +130,7 @@ class HevoPipelineHook(BaseHevoHook):
             raise e
 
     async def find_active_job_by_type_async(
-        self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
+            self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
     ) -> Job:
         """
         Find and return the first active (IN_PROGRESS) job for the given pipeline and type (async).
@@ -170,18 +169,6 @@ class HevoPipelineHook(BaseHevoHook):
             jobs_response = PaginatedJobsResponse(**response)
 
             for job in jobs_response.data:
-                # Log warning for unknown job types or statuses
-                if job.type == JobType.UNKNOWN:
-                    self.log.warning(
-                        "Job %s has unknown type. This may indicate a new job type was added to the Hevo API.",
-                        job.job_id,
-                    )
-                if job.status == JobStatus.UNKNOWN:
-                    self.log.warning(
-                        "Job %s has unknown status. This may indicate a new status was added to the Hevo API.",
-                        job.job_id,
-                    )
-
                 # Compare job types (handle both enum and string inputs)
                 job_type_value = job.type.value if isinstance(job.type, JobType) else str(job.type)
                 expected_type_value = job_type.value if isinstance(job_type, JobType) else str(job_type)
@@ -203,7 +190,7 @@ class HevoPipelineHook(BaseHevoHook):
         raise AirflowException(f"Pipeline {pipeline_id} doesn't have any active jobs of type {job_type_str}.")
 
     async def get_job_completion_status_async(
-        self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
+            self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
     ) -> JobCompletionStatus:
         """
         Get the normalized completion status of a job (async).
@@ -254,13 +241,7 @@ class HevoPipelineHook(BaseHevoHook):
         ]:
             self.log.info("Job %s failed with status %s", job_id, job.status)
             return JobCompletionStatus.FAILED
-        if job.status == JobStatus.UNKNOWN:
-            self.log.warning(
-                "Job %s has unknown status. Treating as pending to continue monitoring. "
-                "This may indicate a new status was added to the Hevo API.",
-                job_id,
-            )
-            return JobCompletionStatus.PENDING
+        # All other statuses are treated as pending (IN_PROGRESS, CANCELLING, etc.)
         return JobCompletionStatus.PENDING
 
     async def update_pipeline_async(self, pipeline_id: int, pipeline_config: dict[str, Any]) -> Pipeline:
@@ -293,7 +274,8 @@ class HevoPipelineHook(BaseHevoHook):
         :raises AirflowException: For API errors (auth, network, server errors).
         """
         self.log.info("Disabling pipeline %s", pipeline_id)
-        await self.execute_api_request_async(method="POST", endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/disable")
+        await self.execute_api_request_async(method="POST", endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/disable",
+                                             payload={"cancel_active_jobs": False})
         self.log.info("Pipeline %s disabled successfully", pipeline_id)
 
     async def enable_pipeline_async(self, pipeline_id: int) -> None:
@@ -346,7 +328,7 @@ class HevoPipelineHook(BaseHevoHook):
         self.log.info("Job %s cancelled successfully", job_id)
 
     async def get_job_objects_async(
-        self, pipeline_id: int, job_id: str, limit: int = 100, cursor: str | None = None
+            self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Get objects processed in a specific job (async).
@@ -397,7 +379,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.trigger_pipeline_sync_async(pipeline_id, ensure_new_job))
 
     def find_active_job_by_type_sync(
-        self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
+            self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
     ) -> Job:
         """
         Find and return the first active (IN_PROGRESS) job for the given pipeline and type (sync wrapper).
@@ -407,7 +389,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.find_active_job_by_type_async(pipeline_id, job_type, page_limit))
 
     def get_job_completion_status_sync(
-        self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
+            self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
     ) -> JobCompletionStatus:
         """
         Get the normalized completion status of a job (sync wrapper).
@@ -457,7 +439,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.cancel_job_async(pipeline_id, job_id))
 
     def get_job_objects_sync(
-        self, pipeline_id: int, job_id: str, limit: int = 100, cursor: str | None = None
+            self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Get objects processed in a specific job (sync wrapper).

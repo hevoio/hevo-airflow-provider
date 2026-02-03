@@ -35,7 +35,7 @@ echo "http://localhost:8080"
 echo ""
 echo "Default credentials:"
 echo "Username: admin"
-echo "Password: admin"
+echo "Password: generated automatically"
 echo "======================================"
 echo ""
 

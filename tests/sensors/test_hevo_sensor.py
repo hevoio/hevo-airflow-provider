@@ -23,7 +23,7 @@ class TestHevoSensorInit:
         assert sensor.job_id is None
         assert sensor.job_type == JobType.INCREMENTAL
         assert sensor.connection_id == "hevo_test_connection"
-        assert sensor.poke_interval == 5
+        assert sensor.poke_interval == 20
         assert sensor.accept_completed_with_failures is False
         assert sensor.deferrable is True
         assert sensor.wait_for_job_max_attempts == 10
