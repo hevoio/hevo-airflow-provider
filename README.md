@@ -14,10 +14,15 @@ pip install apache-airflow-providers-hevo
 git clone https://github.com/hevoio/hevo-airflow-provider.git
 cd hevo-airflow-provider
 
-# Quick setup with uv (recommended)
+# Quick setup with uv
 uv venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
+
+
+# For custom python environment 
+pip install -e /path/to/hevo-airflow-provider
+
 ```
 
 **📖 For detailed setup instructions**, see **[SETUP.md](SETUP.md)** which covers:
