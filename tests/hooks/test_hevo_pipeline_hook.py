@@ -458,7 +458,7 @@ class TestGetJobCompletionStatusAsync:
             mock_request.return_value = job_data
 
             # Unknown status should raise ValidationError
-            with pytest.raises(Exception) as exc_info:
+            with pytest.raises(Exception) as exc_info:  # noqa: PT011
                 await hook.get_job_completion_status_async(123, "job_new")
 
             # Verify it's a validation error with helpful message
@@ -610,7 +610,9 @@ class TestUpdatePipelineAsync:
             pipeline = await hook.update_pipeline_async(123, update_config)
 
             assert isinstance(pipeline, Pipeline)
-            mock_request.assert_called_once_with(method="PATCH", endpoint="/api/v1/pipelines/123", payload=update_config)
+            mock_request.assert_called_once_with(
+                method="PATCH", endpoint="/api/v1/pipelines/123", payload=update_config
+            )
 
 
 class TestUpdatePipelineSync:

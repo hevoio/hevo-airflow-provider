@@ -8,7 +8,6 @@ This DAG:
 """
 
 import json
-
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -43,7 +42,6 @@ def load_data_to_mysql(**context: Any) -> None:
 
     This function generates sample data and inserts it into the table.
     """
-
     mysql_hook = MySqlHook(mysql_conn_id="mysql_default")
 
     # Generate batch_id from DAG run

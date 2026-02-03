@@ -70,8 +70,13 @@ class TestHevoSensorExecute:
     @patch.object(BaseSensorOperator, "execute")
     def test_execute_non_deferrable_calls_parent(self, mock_super_execute, mock_airflow_context) -> None:
         """Test execute in non-deferrable mode delegates to parent class."""
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123", deferrable=False,
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_id="job_123",
+            deferrable=False,
+            connection_id="hevo_test_connection",
+        )
 
         sensor.execute(mock_airflow_context)
 
@@ -79,8 +84,13 @@ class TestHevoSensorExecute:
 
     def test_execute_deferrable_job_not_completed(self, mock_airflow_context) -> None:
         """Test execute in deferrable mode defers when job not completed."""
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123", deferrable=True,
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_id="job_123",
+            deferrable=True,
+            connection_id="hevo_test_connection",
+        )
 
         with patch.object(sensor, "poke", return_value=False):
             with pytest.raises(TaskDeferred) as exc_info:
@@ -93,8 +103,13 @@ class TestHevoSensorExecute:
 
     def test_execute_deferrable_job_already_completed(self, mock_airflow_context) -> None:
         """Test execute in deferrable mode returns when job already completed."""
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123", deferrable=True,
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_id="job_123",
+            deferrable=True,
+            connection_id="hevo_test_connection",
+        )
 
         with patch.object(sensor, "poke", return_value=True):
             # Should not raise TaskDeferred, returns normally
@@ -108,8 +123,9 @@ class TestHevoSensorGetJobId:
 
     def test_get_job_id_returns_explicit_job_id(self, mock_hook_class, mock_sleep, mock_airflow_context) -> None:
         """Test _get_job_id returns explicit job_id if provided."""
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_explicit_123",
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor", pipeline_id=123, job_id="job_explicit_123", connection_id="hevo_test_connection"
+        )
 
         result = sensor._get_job_id()
 
@@ -117,15 +133,16 @@ class TestHevoSensorGetJobId:
         mock_hook_class.assert_not_called()  # Should not need hook
 
     def test_get_job_id_auto_discovery_success(
-            self, mock_hook_class, mock_airflow_context, sample_job_response
+        self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
         """Test _get_job_id auto-discovers job successfully."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
 
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, wait_for_job_initial_delay=1,
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor", pipeline_id=123, wait_for_job_initial_delay=1, connection_id="hevo_test_connection"
+        )
 
         result = sensor._get_job_id()
 
@@ -133,7 +150,7 @@ class TestHevoSensorGetJobId:
         mock_hook.find_active_job_by_type_sync.assert_called()
 
     def test_get_job_id_auto_discovery_with_retries(
-            self, mock_hook_class, mock_sleep, mock_airflow_context, sample_job_response
+        self, mock_hook_class, mock_sleep, mock_airflow_context, sample_job_response
     ) -> None:
         """Test _get_job_id auto-discovery retries before finding job."""
         mock_hook = MagicMock()
@@ -146,8 +163,11 @@ class TestHevoSensorGetJobId:
         ]
 
         sensor = HevoSensor(
-            task_id="test_sensor", pipeline_id=123, wait_for_job_initial_delay=0, wait_for_job_interval=1,
-            connection_id="hevo_test_connection"
+            task_id="test_sensor",
+            pipeline_id=123,
+            wait_for_job_initial_delay=0,
+            wait_for_job_interval=1,
+            connection_id="hevo_test_connection",
         )
 
         result = sensor._get_job_id()
@@ -173,6 +193,7 @@ class TestHevoSensorGetJobId:
         with pytest.raises(AirflowException, match="No active INCREMENTAL job found"):
             sensor._get_job_id()
 
+
 @patch("airflow.hevo.sensor.HevoPipelineHook")
 class TestHevoSensorPoke:
     """Tests for poke method."""
@@ -183,8 +204,9 @@ class TestHevoSensorPoke:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED
 
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123",
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor", pipeline_id=123, job_id="job_123", connection_id="hevo_test_connection"
+        )
 
         result = sensor.poke(mock_airflow_context)
 
@@ -197,8 +219,9 @@ class TestHevoSensorPoke:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.PENDING
 
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123",
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor", pipeline_id=123, job_id="job_123", connection_id="hevo_test_connection"
+        )
 
         result = sensor.poke(mock_airflow_context)
 
@@ -210,8 +233,9 @@ class TestHevoSensorPoke:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.FAILED
 
-        sensor = HevoSensor(task_id="test_sensor", pipeline_id=123, job_id="job_123",
-                            connection_id="hevo_test_connection")
+        sensor = HevoSensor(
+            task_id="test_sensor", pipeline_id=123, job_id="job_123", connection_id="hevo_test_connection"
+        )
 
         with pytest.raises(AirflowException, match="Job job_123 failed"):
             sensor.poke(mock_airflow_context)
@@ -223,8 +247,11 @@ class TestHevoSensorPoke:
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED_WITH_FAILURES
 
         sensor = HevoSensor(
-            task_id="test_sensor", pipeline_id=123, job_id="job_123", accept_completed_with_failures=True,
-            connection_id="hevo_test_connection"
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_id="job_123",
+            accept_completed_with_failures=True,
+            connection_id="hevo_test_connection",
         )
 
         result = sensor.poke(mock_airflow_context)
@@ -238,8 +265,11 @@ class TestHevoSensorPoke:
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED_WITH_FAILURES
 
         sensor = HevoSensor(
-            task_id="test_sensor", pipeline_id=123, job_id="job_123", accept_completed_with_failures=False,
-            connection_id="hevo_test_connection"
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_id="job_123",
+            accept_completed_with_failures=False,
+            connection_id="hevo_test_connection",
         )
 
         with pytest.raises(AirflowException, match="Job job_123 failed"):
@@ -357,8 +387,11 @@ class TestHevoSensorIntegrationScenarios:
         mock_hook.find_active_job_by_type_sync.return_value = Job(**historical_job)
 
         sensor = HevoSensor(
-            task_id="test_sensor", pipeline_id=123, job_type=JobType.HISTORICAL, wait_for_job_initial_delay=0,
-            connection_id="hevo_test_connection"
+            task_id="test_sensor",
+            pipeline_id=123,
+            job_type=JobType.HISTORICAL,
+            wait_for_job_initial_delay=0,
+            connection_id="hevo_test_connection",
         )
 
         job_id = sensor._get_job_id()

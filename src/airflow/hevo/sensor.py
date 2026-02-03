@@ -169,7 +169,7 @@ class HevoSensor(BaseSensorOperator):
         # Job model always has job_id (required field)
         return active_job.job_id
 
-    def poke(self, context: Context) -> bool:
+    def poke(self, context: Context) -> bool:  # noqa: ARG002
         """
         Check if the job has completed (sensor polling method).
 
@@ -222,7 +222,7 @@ class HevoSensor(BaseSensorOperator):
         # Status is JobCompletionStatus.PENDING
         return False
 
-    def execute_complete(self, context: Context, event: dict[Any, Any] | None = None) -> None:
+    def execute_complete(self, context: Context, event: dict[Any, Any] | None = None) -> None:  # noqa: ARG002
         """
         Handle trigger completion event (deferrable mode callback).
 

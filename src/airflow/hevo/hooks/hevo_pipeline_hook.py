@@ -8,7 +8,7 @@ from airflow.exceptions import AirflowException
 from airflow.hevo.hooks.base import BaseHevoHook
 from airflow.hevo.models import Job, PaginatedJobsResponse, Pipeline
 from airflow.hevo.models.job import JobCompletionStatus, JobStatus, JobType
-from airflow.hevo.models.pipeline import PipelineStatus, SyncType
+from airflow.hevo.models.pipeline import PipelineStatus
 
 
 class HevoPipelineHook(BaseHevoHook):
@@ -130,7 +130,7 @@ class HevoPipelineHook(BaseHevoHook):
             raise e
 
     async def find_active_job_by_type_async(
-            self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
+        self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
     ) -> Job:
         """
         Find and return the first active (IN_PROGRESS) job for the given pipeline and type (async).
@@ -190,7 +190,7 @@ class HevoPipelineHook(BaseHevoHook):
         raise AirflowException(f"Pipeline {pipeline_id} doesn't have any active jobs of type {job_type_str}.")
 
     async def get_job_completion_status_async(
-            self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
+        self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
     ) -> JobCompletionStatus:
         """
         Get the normalized completion status of a job (async).
@@ -274,8 +274,11 @@ class HevoPipelineHook(BaseHevoHook):
         :raises AirflowException: For API errors (auth, network, server errors).
         """
         self.log.info("Disabling pipeline %s", pipeline_id)
-        await self.execute_api_request_async(method="POST", endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/disable",
-                                             payload={"cancel_active_jobs": False})
+        await self.execute_api_request_async(
+            method="POST",
+            endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/disable",
+            payload={"cancel_active_jobs": False},
+        )
         self.log.info("Pipeline %s disabled successfully", pipeline_id)
 
     async def enable_pipeline_async(self, pipeline_id: int) -> None:
@@ -328,7 +331,7 @@ class HevoPipelineHook(BaseHevoHook):
         self.log.info("Job %s cancelled successfully", job_id)
 
     async def get_job_objects_async(
-            self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
+        self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Get objects processed in a specific job (async).
@@ -379,7 +382,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.trigger_pipeline_sync_async(pipeline_id, ensure_new_job))
 
     def find_active_job_by_type_sync(
-            self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
+        self, pipeline_id: int, job_type: JobType = JobType.INCREMENTAL, page_limit: int = 10
     ) -> Job:
         """
         Find and return the first active (IN_PROGRESS) job for the given pipeline and type (sync wrapper).
@@ -389,7 +392,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.find_active_job_by_type_async(pipeline_id, job_type, page_limit))
 
     def get_job_completion_status_sync(
-            self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
+        self, pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False
     ) -> JobCompletionStatus:
         """
         Get the normalized completion status of a job (sync wrapper).
@@ -439,7 +442,7 @@ class HevoPipelineHook(BaseHevoHook):
         return asyncio.run(self.cancel_job_async(pipeline_id, job_id))
 
     def get_job_objects_sync(
-            self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
+        self, pipeline_id: int, job_id: str, limit: int = 100, cursor: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Get objects processed in a specific job (sync wrapper).

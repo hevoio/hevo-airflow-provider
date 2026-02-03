@@ -40,12 +40,12 @@ class BaseHevoHook(BaseHook):
     api_user_agent = "hevo_airflow_provider"
 
     def __init__(
-            self,
-            connection_id: Optional[str] = None,
-            retry_limit: int = 3,
-            retry_delay: int = 2,
-            timeout: int = 30,
-            retryable_status_codes: Optional[list[int]] = None,
+        self,
+        connection_id: Optional[str] = None,
+        retry_limit: int = 3,
+        retry_delay: int = 2,
+        timeout: int = 30,
+        retryable_status_codes: Optional[list[int]] = None,
     ) -> None:
         """
         Initialize a Hevo API hook with common request defaults.
@@ -126,15 +126,14 @@ class BaseHevoHook(BaseHook):
 
         # Build URL
         cleaned_endpoint = (endpoint or "").lstrip("/")
-        url = f"{schema}://{host}/{cleaned_endpoint}" if cleaned_endpoint else f"{schema}://{host}"
-        return url
+        return f"{schema}://{host}/{cleaned_endpoint}" if cleaned_endpoint else f"{schema}://{host}"
 
     async def execute_api_request_async(
-            self,
-            method: str,
-            endpoint: str,
-            params: dict[str, Any] | None = None,
-            payload: dict[str, Any] | None = None,
+        self,
+        method: str,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Perform an asynchronous API request with retries.
@@ -159,8 +158,7 @@ class BaseHevoHook(BaseHook):
             attempt_num = 1
             while attempt_num <= self.retry_limit:
                 try:
-                    response = await session.request(
-                        method, url, params=params, json=payload)
+                    response = await session.request(method, url, params=params, json=payload)
                     response.raise_for_status()
 
                     # Check if there's content to parse
@@ -171,7 +169,7 @@ class BaseHevoHook(BaseHook):
 
                 except ClientResponseError as e:
                     last_exception = e
-                    if not (e.status in self.retryable_status_codes):
+                    if e.status not in self.retryable_status_codes:
                         self.log.error("Non-retryable error: %s - %s", e.status, e.message)
                         raise AirflowException(f"API request failed with status {e.status}: {e.message}") from e
 
@@ -182,10 +180,12 @@ class BaseHevoHook(BaseHook):
                 # Check if we should retry
                 if attempt_num >= self.retry_limit:
                     raise AirflowException(
-                        f"API request to {url} failed after {self.retry_limit} attempts") from last_exception
+                        f"API request to {url} failed after {self.retry_limit} attempts"
+                    ) from last_exception
 
                 attempt_num += 1
                 await asyncio.sleep(self.retry_delay)
+        return {}
 
     def _get_auth_from_connection(self, airflow_connection: Connection) -> aiohttp.BasicAuth | None:
         """

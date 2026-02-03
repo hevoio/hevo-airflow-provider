@@ -45,8 +45,9 @@ class TestHevoTriggerInit:
 
     def test_trigger_initialization_without_job_id(self) -> None:
         """Test trigger initialization for auto-discovery mode."""
-        trigger = HevoTrigger(pipeline_id=123, job_id=None, job_type=JobType.INCREMENTAL,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123, job_id=None, job_type=JobType.INCREMENTAL, connection_id="hevo_test_connection"
+        )
         assert trigger.job_id is None
         assert trigger.job_type == JobType.INCREMENTAL.value
 
@@ -88,8 +89,9 @@ class TestHevoTriggerSerialize:
 
     def test_serialization_round_trip(self) -> None:
         """Test that serialized params can reconstruct trigger."""
-        trigger1 = HevoTrigger(pipeline_id=123, job_id="job_123", job_type=JobType.INCREMENTAL, poke_interval=7,
-                               connection_id="test_conn")
+        trigger1 = HevoTrigger(
+            pipeline_id=123, job_id="job_123", job_type=JobType.INCREMENTAL, poke_interval=7, connection_id="test_conn"
+        )
 
         class_path, params = trigger1.serialize()
 
@@ -160,8 +162,13 @@ class TestHevoTriggerRunCompletedWithFailures:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_async = AsyncMock(return_value=JobCompletionStatus.COMPLETED_WITH_FAILURES)
 
-        trigger = HevoTrigger(pipeline_id=123, job_id="job_123", accept_completed_with_failures=True, poke_interval=1,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123,
+            job_id="job_123",
+            accept_completed_with_failures=True,
+            poke_interval=1,
+            connection_id="hevo_test_connection",
+        )
 
         events = []
         async for event in trigger.run():
@@ -181,8 +188,13 @@ class TestHevoTriggerRunCompletedWithFailures:
         # When not accepting failures, hook returns FAILED
         mock_hook.get_job_completion_status_async = AsyncMock(return_value=JobCompletionStatus.FAILED)
 
-        trigger = HevoTrigger(pipeline_id=123, job_id="job_123", accept_completed_with_failures=False, poke_interval=1,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123,
+            job_id="job_123",
+            accept_completed_with_failures=False,
+            poke_interval=1,
+            connection_id="hevo_test_connection",
+        )
 
         events = []
         async for event in trigger.run():
@@ -299,8 +311,13 @@ class TestHevoTriggerRunAutoDiscovery:
         mock_hook.find_active_job_by_type_async = AsyncMock(return_value=Job(**historical_job))
         mock_hook.get_job_completion_status_async = AsyncMock(return_value=JobCompletionStatus.COMPLETED)
 
-        trigger = HevoTrigger(pipeline_id=123, job_id=None, job_type=JobType.HISTORICAL, poke_interval=1,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123,
+            job_id=None,
+            job_type=JobType.HISTORICAL,
+            poke_interval=1,
+            connection_id="hevo_test_connection",
+        )
 
         events = []
         async for event in trigger.run():
@@ -359,8 +376,9 @@ class TestHevoTriggerRunExceptionHandling:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_async = AsyncMock(side_effect=AirflowException("Test error"))
 
-        trigger = HevoTrigger(pipeline_id=999, job_id="job_error", poke_interval=1,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=999, job_id="job_error", poke_interval=1, connection_id="hevo_test_connection"
+        )
 
         events = []
         async for event in trigger.run():
@@ -390,7 +408,7 @@ class TestHevoTriggerIntegrationScenarios:
 
     @pytest.mark.asyncio
     async def test_trigger_full_workflow_auto_discovery_to_completion(
-            self, mock_hook_class, sample_job_response
+        self, mock_hook_class, sample_job_response
     ) -> None:
         """Test full trigger workflow: auto-discovery -> polling -> completion."""
         mock_hook = MagicMock()
@@ -435,8 +453,9 @@ class TestHevoTriggerIntegrationScenarios:
             ]
         )
 
-        trigger = HevoTrigger(pipeline_id=123, job_id="job_long_running", poke_interval=1,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123, job_id="job_long_running", poke_interval=1, connection_id="hevo_test_connection"
+        )
 
         events = []
         async for event in trigger.run():
@@ -561,8 +580,9 @@ class TestHevoTriggerEventPayloads:
         mock_hook_class.return_value = mock_hook
         mock_hook.get_job_completion_status_async = AsyncMock(return_value=JobCompletionStatus.COMPLETED_WITH_FAILURES)
 
-        trigger = HevoTrigger(pipeline_id=123, job_id="job_123", accept_completed_with_failures=True,
-                              connection_id="hevo_test_connection")
+        trigger = HevoTrigger(
+            pipeline_id=123, job_id="job_123", accept_completed_with_failures=True, connection_id="hevo_test_connection"
+        )
 
         events = []
         async for event in trigger.run():

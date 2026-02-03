@@ -85,6 +85,10 @@ ignore = [
     "S101", "S105", "S110", "S113", "S311", "S603", "S608",
     "BLE001",  # Allow catching Exception in hooks/triggers
     "SIM117",  # Allow nested with statements in tests
+    "UP045",
+    "UP007",
+    "DTZ005",
+    "DTZ001"
 ]
 fixable = ["ALL"]
 unfixable = []

@@ -26,7 +26,7 @@ class HevoObjectHook(BaseHevoHook):
     # Async API Methods
 
     async def list_objects_async(
-            self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
+        self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
     ) -> PaginatedObjectsResponse:
         """
         List all objects in a pipeline (async).
@@ -111,7 +111,7 @@ class HevoObjectHook(BaseHevoHook):
     # These methods wrap the async methods above using asyncio.run()
 
     def list_objects_sync(
-            self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
+        self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
     ) -> PaginatedObjectsResponse:
         """
         List all objects in a pipeline (sync wrapper).

@@ -96,7 +96,9 @@ class TestHevoOperatorExecuteFireAndForget:
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
 
         # Create and execute operator
-        op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False)
+        op = HevoPipelineOperator(
+            task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False
+        )
         result = op.execute(mock_airflow_context)
 
         # Assertions
@@ -116,7 +118,9 @@ class TestHevoOperatorExecuteFireAndForget:
             "Pipeline 123 doesn't have any active jobs of type INCREMENTAL"
         )
 
-        op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False, retry_limit=2)
+        op = HevoPipelineOperator(
+            task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False, retry_limit=2
+        )
 
         with patch("airflow.hevo.operators.sleep"):
             with pytest.raises(AirflowException, match="No active INCREMENTAL job found"):
@@ -142,7 +146,9 @@ class TestHevoOperatorExecuteFireAndForget:
             Job(**sample_job_response),
         ]
 
-        op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False)
+        op = HevoPipelineOperator(
+            task_id="test_task", connection_id="test_conn", pipeline_id=123, wait_for_completion=False
+        )
 
         with patch("airflow.hevo.operators.sleep"):
             result = op.execute(mock_airflow_context)
@@ -165,7 +171,9 @@ class TestHevoOperatorExecuteDeferrable:
         mock_hook.trigger_pipeline_sync.return_value = None
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
 
-        op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123, deferrable=True, wait_for_completion=True)
+        op = HevoPipelineOperator(
+            task_id="test_task", connection_id="test_conn", pipeline_id=123, deferrable=True, wait_for_completion=True
+        )
 
         with pytest.raises(TaskDeferred) as exc_info:
             op.execute(mock_airflow_context)
@@ -228,7 +236,9 @@ class TestHevoOperatorExecuteSynchronous:
         mock_hook.find_active_job_by_type_sync.return_value = Job(**sample_job_response)
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED
 
-        op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123, deferrable=False, wait_for_completion=True)
+        op = HevoPipelineOperator(
+            task_id="test_task", connection_id="test_conn", pipeline_id=123, deferrable=False, wait_for_completion=True
+        )
 
         result = op.execute(mock_airflow_context)
 
@@ -243,7 +253,11 @@ class TestHevoOperatorExecuteComplete:
         """Test execute_complete processes success event correctly."""
         op = HevoPipelineOperator(task_id="test_task", connection_id="test_conn", pipeline_id=123)
 
-        event = {"status": "success", "message": "Job completed successfully", "job_id": "550e8400-e29b-41d4-a716-446655440001"}
+        event = {
+            "status": "success",
+            "message": "Job completed successfully",
+            "job_id": "550e8400-e29b-41d4-a716-446655440001",
+        }
 
         # Should not raise
         op.execute_complete(mock_airflow_context, event)
@@ -589,9 +603,7 @@ class TestHevoOperatorResyncAction:
         result = op.execute(mock_airflow_context)
 
         # Verify it's looking for INCREMENTAL job type
-        mock_hook.find_active_job_by_type_sync.assert_called_once_with(
-            pipeline_id=123, job_type=JobType.INCREMENTAL
-        )
+        mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.INCREMENTAL)
         assert result == sample_job_response["job_id"]
 
     def test_resync_action_with_explicit_incremental_job_type(
@@ -622,9 +634,7 @@ class TestHevoOperatorResyncAction:
         result = op.execute(mock_airflow_context)
 
         # Verify it's looking for INCREMENTAL job type (not default TRUNCATE_AND_LOAD)
-        mock_hook.find_active_job_by_type_sync.assert_called_once_with(
-            pipeline_id=123, job_type=JobType.INCREMENTAL
-        )
+        mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.INCREMENTAL)
         assert result == incremental_job["job_id"]
 
     def test_resync_action_drop_and_load_with_deferrable(
@@ -697,13 +707,10 @@ class TestHevoOperatorResyncAction:
         mock_hook.get_job_completion_status_sync.assert_called_once()
         assert result == truncate_job["job_id"]
 
-
     def test_resync_waits_for_pipeline_initialized(
         self, mock_hook_class, mock_airflow_context, sample_job_response, sample_pipeline_response
     ) -> None:
         """Test RESYNC action waits for pipeline to reach INITIALIZED status before triggering."""
-        from airflow.hevo.models.pipeline import Pipeline, PipelineStatus
-
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
 
@@ -753,8 +760,6 @@ class TestHevoOperatorResyncAction:
         self, mock_hook_class, mock_airflow_context, sample_job_response, sample_pipeline_response
     ) -> None:
         """Test RESYNC action has no retry limit when waiting for INITIALIZED status."""
-        from airflow.hevo.models.pipeline import Pipeline
-
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
 
@@ -792,9 +797,7 @@ class TestHevoOperatorResyncAction:
 
         assert result == "550e8400-e29b-41d4-a716-446655440001"
 
-    def test_resync_raises_when_pipeline_not_found(
-        self, mock_hook_class, mock_airflow_context
-    ) -> None:
+    def test_resync_raises_when_pipeline_not_found(self, mock_hook_class, mock_airflow_context) -> None:
         """Test RESYNC action raises when pipeline does not exist."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook

@@ -62,19 +62,19 @@ class HevoPipelineOperator(BaseOperator):
     template_fields = ("pipeline_id",)
 
     def __init__(  # noqa: PLR0913
-            self,
-            pipeline_id: int,
-            connection_id: str = "hevo_airflow_conn_id",
-            action: PipelineAction = PipelineAction.SYNC_NOW,
-            job_type: Optional[JobType] = None,
-            poll_interval: int = 15,
-            retry_limit: int = 10,
-            deferrable: bool = True,
-            wait_for_completion: bool = True,
-            accept_completed_with_failures: bool = False,
-            ensure_new_job: bool = True,
-            drop_and_load: bool = False,
-            **kwargs,
+        self,
+        pipeline_id: int,
+        connection_id: str = "hevo_airflow_conn_id",
+        action: PipelineAction = PipelineAction.SYNC_NOW,
+        job_type: Optional[JobType] = None,
+        poll_interval: int = 15,
+        retry_limit: int = 10,
+        deferrable: bool = True,
+        wait_for_completion: bool = True,
+        accept_completed_with_failures: bool = False,
+        ensure_new_job: bool = True,
+        drop_and_load: bool = False,
+        **kwargs,
     ) -> None:
         self.pipeline_id = pipeline_id
         self.action = action
@@ -248,7 +248,7 @@ class HevoPipelineOperator(BaseOperator):
             if current_status == PipelineStatus.INITIALIZED:
                 self.log.info("Pipeline %s is now in INITIALIZED status, ready for resync", self.pipeline_id)
                 return
-            elif current_status != PipelineStatus.RESTARTING:
+            if current_status != PipelineStatus.RESTARTING:
                 raise AirflowException(f"Pipeline {self.pipeline_id} is not in INITIALIZED state: {current_status}")
             # Pipeline not initialized yet, wait and retry
             sleep(self.poll_interval)

@@ -8,9 +8,6 @@ from __future__ import annotations
 
 from airflow.hevo.models.job import Job, PaginatedJobsResponse
 from airflow.hevo.models.object import (
-    LoadMode as ObjectLoadMode,
-)
-from airflow.hevo.models.object import (
     FieldStatus,
     Namespace,
     ObjectField,
@@ -18,6 +15,9 @@ from airflow.hevo.models.object import (
     PaginatedObjectsResponse,
     PipelineObject,
     ReplicationStatus,
+)
+from airflow.hevo.models.object import (
+    LoadMode as ObjectLoadMode,
 )
 from airflow.hevo.models.pipeline import (
     Destination,

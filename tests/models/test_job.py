@@ -43,7 +43,6 @@ class TestJobEnums:
         assert JobCompletionStatus.PENDING == "pending"
 
 
-
 class TestJobModel:
     """Tests for Job model."""
 

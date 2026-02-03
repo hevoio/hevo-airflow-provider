@@ -16,12 +16,13 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-from airflow import DAG
-from airflow.hevo.models.pipeline import PipelineAction
-from airflow.hevo.operators import HevoPipelineOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
+
+from airflow import DAG
+from airflow.hevo.models.pipeline import PipelineAction
+from airflow.hevo.operators import HevoPipelineOperator
 
 # Default arguments for the DAG
 default_args = {
@@ -78,9 +79,7 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
     if not batch_id:
         return
 
-    snowflake_hook = SnowflakeHook(
-        snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON"
-    )
+    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON")
 
     query = """
     SELECT id, batch_id, generated_at, value_int, value_text, payload
@@ -147,4 +146,3 @@ fetch_latest_data_from_warehouse = PythonOperator(
 
 # Define task dependencies
 load_data_task >> resync_deferrable >> fetch_latest_data_from_warehouse
-
