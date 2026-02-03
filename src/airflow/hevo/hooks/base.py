@@ -155,15 +155,12 @@ class BaseHevoHook(BaseHook):
         headers = self._get_headers()
         timeout = aiohttp.ClientTimeout(total=self.timeout)
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(auth=auth, headers=headers, timeout=timeout) as session:
             attempt_num = 1
-            last_exception = None
-
             while attempt_num <= self.retry_limit:
                 try:
                     response = await session.request(
-                        method, url, params=params, json=payload, auth=auth, headers=headers, timeout=timeout
-                    )
+                        method, url, params=params, json=payload)
                     response.raise_for_status()
 
                     # Check if there's content to parse
@@ -184,13 +181,11 @@ class BaseHevoHook(BaseHook):
 
                 # Check if we should retry
                 if attempt_num >= self.retry_limit:
-                    break
+                    raise AirflowException(
+                        f"API request to {url} failed after {self.retry_limit} attempts") from last_exception
 
                 attempt_num += 1
                 await asyncio.sleep(self.retry_delay)
-
-            # If we get here, all retries exhausted
-            raise AirflowException(f"API request to {url} failed after {self.retry_limit} attempts") from last_exception
 
     def _get_auth_from_connection(self, airflow_connection: Connection) -> aiohttp.BasicAuth | None:
         """

@@ -29,10 +29,7 @@ WORKDIR /opt/airflow
 RUN mkdir -p /opt/airflow/dag_examples /opt/airflow/logs
 
 # Copy Hevo provider source code
-COPY --chown=airflow:airflow src /opt/hevo-airflow-provider/src
-COPY --chown=airflow:airflow pyproject.toml /opt/hevo-airflow-provider/pyproject.toml
-COPY --chown=airflow:airflow README.md /opt/hevo-airflow-provider/README.md
-COPY --chown=airflow:airflow dag_examples/ ./dag_examples/
+COPY --chown=airflow:airflow . /opt/hevo-airflow-provider
 
 # Copy requirements file
 COPY --chown=airflow:airflow docker/airflow-3.0/requirements.txt ./requirements.txt
