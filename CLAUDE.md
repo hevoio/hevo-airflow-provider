@@ -28,14 +28,12 @@ pip install -e ".[dev]"
 
 ```bash
 uv run pytest                 # Run pytest
-uv run pytest --cov --cov-report=html  # Run with coverage report (htmlcov/index.html)
 uv run pytest tests/test_specific.py::test_name  # Single test
 
 uv run ruff check             # Run ruff linter
 uv run ruff check --fix       # Auto-fix lint issues
 uv run ruff format            # Format code with ruff
 uv run mypy src               # Run mypy type checker
-uv run ruff check && uv run mypy src && uv run pytest  # Run all checks and tests
 ```
 
 ### Build & Clean
@@ -75,9 +73,6 @@ API (Hevo REST API via aiohttp)
 **`src/airflow/hevo/hooks/`**
 - `base.py`: `BaseHevoHook` - Foundation for all API interactions (connection mgmt, error handling)
   - `get_airflow_connection_async()` - Retrieves and caches Airflow connection
-  - `get_auth_from_connection()` - Extracts HTTP Basic Auth credentials from connection
-  - `get_headers()` - Builds standard HTTP headers for API requests
-  - `build_api_url()` - Constructs full API endpoint URL from connection and endpoint path
   - `execute_api_request_async()` - Core async HTTP request executor with retry logic
 - `hevo_pipeline_hook.py`:
   - `HevoPipelineHook` - Unified hook with async-first architecture for pipeline operations
@@ -170,7 +165,7 @@ HevoPipelineOperator(
 - Re-ingests all data from the source (complete historical reload)
 - Ignores `ensure_new_job` parameter
 - **Default job type**: `TRUNCATE_AND_LOAD`
-- **Optional parameter**: `drop_and_load` (default: False) to drop/recreate destination tables
+- **Optional parameter**: `drop_and_load` (default: False) to drop data and load them to destination tables
 - **Use for**:
   - Reprocessing data after schema changes
   - Recovering from data corruption
@@ -351,12 +346,6 @@ Schema: https
 Login: <your_api_username>
 Password: <your_api_key>
 
-# Optional extras (JSON)
-{
-  "headers": {
-    "X-Custom-Header": "value"
-  }
-}
 ```
 
 Connection is resolved via `BaseHevoHook.connection` cached property.

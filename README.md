@@ -308,13 +308,13 @@ This is useful when:
 - External systems trigger the same pipeline concurrently
 - Strict job isolation is required
 
-To **allow** concurrent jobs, set `ensure_new_job=False`:
+To ensure the task doesn't fail if a job is already running and monitor the active job, set `ensure_new_job=False`:
 
 ```python
 HevoOperator(
     task_id="sync_pipeline",
     pipeline_id=123,
-    ensure_new_job=False  # Allows triggering even if job exists
+    ensure_new_job=False  # Doesn't fail if a job is already running, monitors for completion of the active job
 )
 ```
 
@@ -364,14 +364,8 @@ HevoOperator(
 # Run all tests
 uv run pytest
 
-# Run with coverage
-uv run pytest --cov --cov-report=html
-
 # Run specific test
 uv run pytest tests/operators/test_hevo_operator.py::test_operator_execute
-
-# Run all checks (lint, typecheck, tests)
-uv run ruff check && uv run mypy src && uv run pytest
 ```
 
 **📖 For detailed testing and development setup**, see **[SETUP.md](SETUP.md)**.
@@ -379,21 +373,18 @@ uv run ruff check && uv run mypy src && uv run pytest
 ### Documentation
 
 - **[SETUP.md](SETUP.md)**: Setup and installation guide (development, production, Docker)
-- **[CLAUDE.md](CLAUDE.md)**: Development guide and architecture details
 - **[CONFIGURATION_PARAMETERS.md](CONFIGURATION_PARAMETERS.md)**: Comprehensive parameter reference
-- **[dags/](dag_examples/)**: Example DAGs for various use cases
+- **[dag_examples/](dag_examples/)**: Example DAGs for various use cases
 
 ### Requirements
 
 - Python: >=3.9
-- Airflow: >=2.4.0 (requires deferrable support)
-- Tested on: Python 3.9, 3.10, 3.11, 3.12, 3.13
+- Airflow: >=2.4.0
 
 ### Key Dependencies
 
 - `apache-airflow>=2.4.0` - Core Airflow
 - `aiohttp==3.13.2` - Async HTTP client
-- `requests==2.32.5` - Sync HTTP client
 - `pydantic>=2.0.0` - Data validation
 
 ### Links
