@@ -94,6 +94,9 @@ source venv/bin/activate  # On macOS/Linux
 ```bash
 # Install in editable mode with dev dependencies
 pip install -e ".[dev]"
+
+# For custom python environment 
+pip install -e /path/to/hevo-airflow-provider
 ```
 
 ### Step 4: Verify Installation
@@ -129,16 +132,7 @@ cd hevo-airflow-provider
 pip install .
 ```
 
-### Step 3: Verify Installation
-
-```bash
-# List installed providers
-airflow providers list | grep hevo
-```
-
-You should see `apache-airflow-providers-hevo` in the output.
-
-### Step 4: Configure Hevo Connection
+### Step 3: Configure Hevo Connection
 
 1. Open Airflow UI at `http://localhost:8080`
 2. Navigate to **Admin → Connections**
@@ -146,7 +140,7 @@ You should see `apache-airflow-providers-hevo` in the output.
 4. Configure the connection:
 
    ```
-   Connection ID: hevo_default
+   Connection ID: hevo_airflow_conn_id
    Connection Type: HTTP
    Host: us.hevodata.com (or your region: eu.hevodata.com, in.hevodata.com)
    Schema: https
@@ -159,7 +153,7 @@ You should see `apache-airflow-providers-hevo` in the output.
 
 ---
 
-## Option 4: Docker Setup (Local Testing)
+## Option 4: Docker Setup
 
 The provider includes Docker configurations for testing with different Airflow versions.
 
@@ -206,12 +200,16 @@ Open your browser and navigate to `http://localhost:8080`
 
 **Default credentials:**
 - Username: `admin`
-- Password: `admin`
+- Password: <generated password> fetch password using the following command
+
+  ```bash
+  docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
+  ```
 
 ### Step 6: View Container Logs (Optional)
 
 ```bash
-docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
+docker logs -f hevo-airflow-3.0
 ```
 
 ### Step 7: Stop Container (When Needed)
@@ -219,87 +217,6 @@ docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
 ```bash
 docker stop hevo-airflow-3.0
 ```
-
-### Docker Environment Variables
-
-You can customize the Docker setup by editing the `docker-compose.yml` file:
-
-```yaml
-environment:
-  - AIRFLOW_HOME=/opt/airflow
-  - AIRFLOW__CORE__LOAD_EXAMPLES=False
-  - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-```
-
-### Mounting DAG Files
-
-The Docker setup automatically mounts the `dags/` directory:
-
-```yaml
-volumes:
-  - ../../dags:/opt/airflow/dags  # DAG examples
-  - ./logs:/opt/airflow/logs      # Logs
-```
-
-This allows you to:
-- Edit DAG files on your host machine
-- See changes reflected immediately in the container
-- Debug using log files
-
----
-
-## Running Example DAGs
-
-The provider includes example DAGs in the `dags/` directory:
-
-### With Local Setup (UV/pip)
-
-```bash
-# Set AIRFLOW_HOME
-export AIRFLOW_HOME=~/airflow
-
-# Copy example DAGs
-cp dags/*.py ~/airflow/dags/
-
-# Start Airflow
-airflow webserver --port 8080 &
-airflow scheduler &
-```
-
-### With Docker Setup
-
-DAGs are automatically available in the Docker container. Just navigate to the Airflow UI and you'll see:
-
-- `hevo_triggerer_example` - Deferrable operator example
-- `hevo_sync_sensor_wait` - Fire-and-forget + Sensor pattern
-- `hevo_sync_synchronous_wait` - Synchronous wait example
-- `hevo_sync_no_wait` - Fire-and-forget mode
-- `hevo_dbt_example` - DBT integration example
-
----
-
-## Verifying Installation
-
-After setup, verify the provider is correctly installed:
-
-### Local Setup (UV/pip):
-```bash
-python -c "from airflow.hevo.operators import HevoOperator; print('✓ HevoOperator imported successfully')"
-python -c "from airflow.hevo.sensor import HevoSensor; print('✓ HevoSensor imported successfully')"
-python -c "from airflow.hevo.hooks import HevoPipelineHook; print('✓ HevoPipelineHook imported successfully')"
-```
-
-### Airflow Provider Check:
-```bash
-airflow providers list | grep hevo
-```
-
-### Docker Setup:
-```bash
-docker exec -it <container-name> airflow providers list | grep hevo
-```
-
----
 
 ## Next Steps
 

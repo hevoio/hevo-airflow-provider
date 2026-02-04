@@ -39,7 +39,7 @@ The `HevoOperator` triggers and optionally waits for Hevo pipeline syncs or resy
 | `wait_for_completion` | `bool` | `True`                                                                              | Wait for the job to complete before returning. If `False`, returns `job_id` immediately via XCom for use with `HevoSensor`. |
 | `accept_completed_with_failures` | `bool` | `False`                                                                             | Treat `COMPLETED_WITH_FAILURES` status as success. Useful when partial failures (e.g., some records failing) are acceptable. |
 | `ensure_new_job` | `bool` | `True`                                                                              | If `True`, fails if a job is already in progress for the pipeline (default behavior). If `False`, proceeds normally even if a job already exists. Useful to prevent triggering duplicate jobs when previous jobs are still running. **Only applies to SYNC_NOW action.** |
-| `drop_and_load` | `bool` | `False`                                                                             | If `True`, drops existing destination tables before loading. Ensures a clean slate by recreating tables from scratch. **Only applies to RESYNC action.** Useful for completely refreshing data when schema or data quality issues require a clean restart. |
+| `drop_and_load` | `bool` | `False`                                                                             | If `True`, drops existing destination tables before loading. **Only applies to RESYNC action.** Useful for completely refreshing data when schema or data quality issues require a clean restart. |
 
 ### Pipeline Actions
 
@@ -57,7 +57,7 @@ The operator supports two types of pipeline actions:
    - **No validation required** - can be triggered on any pipeline
    - Re-ingests all data from the source (full historical reload)
    - Ignores `ensure_new_job` parameter
-   - **Default job type**: `TRUNCATE_AND_LOAD` (can be overridden)
+   - **Default job type**: `TRUNCATE_AND_LOAD`
    - **Optional**: `drop_and_load` parameter to drop/recreate destination tables
    - **Use Cases**:
      - Reprocessing data after schema changes
@@ -90,7 +90,7 @@ resync_clean_task = HevoPipelineOperator(
     task_id="resync_clean",
     pipeline_id=123,
     action=PipelineAction.RESYNC,
-    drop_and_load=True  # Drop existing tables before loading
+    drop_and_load=True  # Drop data from existing tables before loading
 )
 ```
 
@@ -109,7 +109,7 @@ The operator supports three execution modes based on parameter combinations:
 
 3. **Deferrable wait** (recommended): `deferrable=True, wait_for_completion=True`
    - Releases worker slot, monitored by triggerer service
-   - Resource-efficient, ideal for production
+   - Resource-efficient
 
 ### Built-in Resilience Features
 
@@ -263,13 +263,6 @@ The `HevoTrigger` is used internally by deferrable operators and sensors for asy
 | `accept_completed_with_failures` | `bool` | `False`                               | Treat `COMPLETED_WITH_FAILURES` status as success. |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default) | Airflow connection ID for Hevo API credentials. |
 
-### Technical Notes
-
-- Runs in Airflow's triggerer service (separate process)
-- Uses async HTTP requests via `aiohttp`
-- Yields `TriggerEvent` when job reaches terminal state
-- Automatically serialized/deserialized for persistence across Airflow restarts
-
 ---
 
 ## Hook Parameters (BaseHevoHook)
@@ -324,13 +317,13 @@ hook_no_retry = HevoPipelineHook(
 
 ### Timing & Polling Parameters
 
-| Parameter | Operator | Sensor | Trigger | Hook | Default | Description |
-|-----------|----------|--------|---------|------|---------|-------------|
-| `poll_interval` | ✅ | ✅ | ✅ | ❌ | `5` | Seconds between status checks |
-| `poke_interval` | ❌ | ✅ | ✅ | ❌ | `5` | Seconds between status checks (sensor-specific name) |
+| Parameter | Operator | Sensor | Trigger | Hook | Default                | Description |
+|-----------|----------|--------|---------|------|------------------------|-------------|
+| `poll_interval` | ✅ | ✅ | ✅ | ❌ | `15`                   | Seconds between status checks |
+| `poke_interval` | ❌ | ✅ | ✅ | ❌ | `15`                   | Seconds between status checks (sensor-specific name) |
 | `retry_limit` | ✅ | ❌ | ❌ | ✅ | `10` (op) / `3` (hook) | Max attempts for job discovery (op) or HTTP retries (hook) |
-| `retry_delay` | ❌ | ❌ | ❌ | ✅ | `2` | Seconds between HTTP retry attempts |
-| `timeout` | ❌ | ❌ | ❌ | ✅ | `30` | HTTP request timeout in seconds |
+| `retry_delay` | ❌ | ❌ | ❌ | ✅ | `2`                    | Seconds between HTTP retry attempts |
+| `timeout` | ❌ | ❌ | ❌ | ✅ | `30`                   | HTTP request timeout in seconds |
 
 ### Job Discovery Parameters
 
@@ -500,9 +493,9 @@ def sync_all_pipelines():
 sync_all_pipelines()
 ```
 
-### Pattern 8: Preventing Duplicate Job Triggers
+### Pattern 8: Ensure a new job is registered by the operator
 
-**Scenario**: Ensure no duplicate jobs are triggered when a job is already running (default behavior).
+**Scenario**: Ensure a new job is triggered and monitored by the operator.
 
 ```python
 HevoOperator(
@@ -515,19 +508,13 @@ HevoOperator(
 )
 ```
 
-This is the **default behavior** (since `ensure_new_job=True` by default) and is useful in scenarios where:
-- DAG is manually triggered multiple times
-- External systems trigger the same pipeline concurrently
-- You want to prevent queueing multiple jobs for the same pipeline
-- Strict job isolation is required for your use case
-
-To allow triggering even when a job exists, set `ensure_new_job=False`:
+To allow monitoring an already existing job, set `ensure_new_job=False`:
 
 ```python
 HevoOperator(
     task_id="sync_pipeline",
     pipeline_id=123,
-    ensure_new_job=False,       # Allow triggering if job already running
+    ensure_new_job=False,       # Allow monitoring already existing job
     deferrable=True,
     wait_for_completion=True,
     poll_interval=10
@@ -556,7 +543,7 @@ HevoPipelineOperator(
     accept_completed_with_failures=True  # Allow partial failures during large resyncs
 )
 
-# Clean slate resync (drops and recreates destination tables)
+# Clean slate resync (drops all data and loads to destination tables)
 HevoPipelineOperator(
     task_id="resync_clean_slate",
     pipeline_id=123,
@@ -568,89 +555,6 @@ HevoPipelineOperator(
     poll_interval=30,
     retry_limit=20,
     accept_completed_with_failures=True
-)
-```
-
-**Use Cases**:
-- **Schema Changes**: Reprocess all data after modifying source schema or adding transformations
-- **Data Corruption**: Recover from data quality issues by re-ingesting from source
-- **Clean Slate Refresh**: Use `drop_and_load=True` to drop and recreate tables, ensuring no remnants from previous loads
-- **Destination Migration**: Populate a new destination with full historical data
-- **Compliance**: Re-apply updated data masking or privacy rules to historical records
-
-**Job Type**: RESYNC operations default to tracking `TRUNCATE_AND_LOAD` job type (can be overridden to `INCREMENTAL` or `HISTORICAL` if needed)
-
----
-
-## Parameter Validation Rules
-
-### Type Validation
-
-- **Integer parameters**: Must be positive integers
-  - `pipeline_id`, `poll_interval`, `retry_limit`, etc.
-
-- **Boolean parameters**: Must be `True` or `False`
-  - `deferrable`, `wait_for_completion`, `accept_completed_with_failures`
-
-- **Enum parameters**: Can be enum or string
-  - `job_type`: `JobType.INCREMENTAL` or `"INCREMENTAL"`
-  - `action`: `PipelineAction.SYNC_NOW` or `PipelineAction.RESYNC`
-
-### Logical Constraints
-
-1. **Deferrable mode requires triggerer service**
-   - Setting `deferrable=True` without a running triggerer will cause tasks to hang
-
-2. **Fire-and-forget returns job_id**
-   - `wait_for_completion=False` makes operator return job_id string via XCom
-   - `wait_for_completion=True` makes operator return `None`
-
-3. **Sensor requires either job_id or auto-discovery**
-   - Provide explicit `job_id` OR rely on auto-discovery
-   - Auto-discovery uses `job_type` to find the active job
-
-4. **Retry limits affect different behaviors**
-   - **Operator `retry_limit`**: Max attempts to find job after triggering (default: 10)
-   - **Hook `retry_limit`**: Max HTTP request retries for any API call (default: 3)
-
----
-
-## Environment-Specific Recommendations
-
-### Development
-
-```python
-HevoOperator(
-    pipeline_id=123,
-    deferrable=False,      # Simpler debugging
-    poll_interval=5,
-    retry_limit=5,
-    timeout=30
-)
-```
-
-### Staging
-
-```python
-HevoOperator(
-    pipeline_id=123,
-    deferrable=True,       # Test deferrable mode
-    poll_interval=10,
-    retry_limit=10,
-    timeout=45
-)
-```
-
-### Production
-
-```python
-HevoOperator(
-    pipeline_id=123,
-    deferrable=True,                    # Always deferrable
-    poll_interval=15,                   # Reduce API load
-    retry_limit=20,                     # More resilient
-    timeout=60,                         # Longer timeout
-    accept_completed_with_failures=True # Based on business logic
 )
 ```
 
@@ -671,424 +575,3 @@ Extra: {"headers": {"X-Custom-Header": "value"}}  # Optional
 ```
 
 ---
-
-## Performance Tuning Guidelines
-
-### Reduce API Load
-
-- **Increase `poll_interval`**: Check less frequently (10-30 seconds for production)
-- **Use deferrable mode**: Reduces worker resource consumption
-
-### Improve Responsiveness
-
-- **Decrease `poll_interval`**: Check more frequently (5 seconds minimum recommended)
-- **Increase `retry_limit`**: More attempts to find jobs after triggering
-
-### Handle Flaky Networks
-
-- **Increase `timeout`**: Allow longer for responses (30-60 seconds)
-- **Increase `retry_delay`**: Give more time between retries (3-5 seconds)
-- **Include rate limiting in retries**: `retryable_status_codes=[429, 500, 502, 503]`
-
-### Optimize for Long-Running Jobs
-
-- **Use deferrable mode**: Essential for jobs taking >5 minutes
-- **Increase sensor `timeout`**: Set appropriate timeout for job duration
-- **Use fire-and-forget pattern**: Decouple triggering from monitoring
-
----
-
-## Troubleshooting
-
-### Job Not Found After Triggering
-
-**Symptoms**: `AirflowException: No active job found after X attempts`
-
-**Solutions**:
-- Increase `retry_limit` (operator) or `wait_for_job_max_attempts` (sensor)
-- Increase `wait_for_job_initial_delay` (sensor) - job may take longer to appear
-- Verify pipeline is in `INITIALIZED` state
-- Check `job_type` matches the triggered job type
-
-### Worker Slot Exhaustion
-
-**Symptoms**: All workers busy, tasks queuing
-
-**Solutions**:
-- Set `deferrable=True` on all long-running tasks
-- Ensure triggerer service is running
-- Increase `poll_interval` to reduce active polling
-
-### API Rate Limiting
-
-**Symptoms**: HTTP 429 errors in logs
-
-**Solutions**:
-- Add 429 to `retryable_status_codes`: `[429, 500, 502, 503]`
-- Increase `poll_interval` to reduce request frequency
-- Increase `retry_delay` to space out retries
-
----
-
-## External Hevo APIs Used
-
-This section documents all external Hevo API endpoints called by the Airflow provider components (operators, sensors, triggers, and hooks).
-
-### API Base URL
-
-All API requests are made to the Hevo API endpoint configured in your Airflow connection:
-
-```
-Base URL: https://{region}.hevodata.com
-Examples:
-  - https://us.hevodata.com (US region)
-  - https://eu.hevodata.com (EU region)
-  - https://in.hevodata.com (India region)
-```
-
-### Authentication
-
-All API requests require HTTP Basic Authentication using credentials from the Airflow connection:
-- **Username**: API username (connection `login` field)
-- **Password**: API key (connection `password` field)
-
-### API Endpoints Reference
-
-#### 1. Get Pipeline Details
-
-**Endpoint**: `GET /api/v1/pipelines/{pipeline_id}`
-
-**Description**: Retrieves complete pipeline information including status, source, destination, and configuration.
-
-**Used By**:
-- `HevoOperator.execute()` - Validates pipeline before triggering sync
-- `HevoPipelineHook.get_pipeline_async()` - Direct pipeline info retrieval
-- `HevoPipelineHook.validate_pipeline_async()` - Pipeline state validation
-
-**Request**:
-```http
-GET /api/v1/pipelines/123 HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Accept: application/json
-```
-
-**Response (Success - 200)**:
-```json
-{
-  "id": 123,
-  "name": "PostgreSQL to Snowflake",
-  "status": "INITIALIZED",
-  "source": {
-    "source_id": "src_456",
-    "source_name": "Production DB",
-    "source_type": "PostgreSQL"
-  },
-  "destination": {
-    "destination_id": "dest_789",
-    "destination_name": "Analytics Warehouse",
-    "destination_type": "Snowflake"
-  },
-  "config": {
-    "sync_type": "ON_DEMAND",
-    "objects": [...]
-  },
-  "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Response (Not Found - 404)**:
-```json
-{
-  "error": "Pipeline not found",
-  "message": "Pipeline with ID 123 does not exist"
-}
-```
-
-**Error Handling**:
-- `404`: Returns `None` in `get_pipeline_async()`, raises exception in `validate_pipeline_async()`
-- `401/403`: Authentication error - check connection credentials
-- `500+`: Server error - automatic retry based on `retryable_status_codes`
-
----
-
-#### 2. Trigger Pipeline Sync
-
-**Endpoint**: `POST /api/v1/pipelines/{pipeline_id}/actions/sync-now`
-
-**Description**: Triggers a sync operation for the specified pipeline. The pipeline must be in `INITIALIZED` state.
-
-**Used By**:
-- `HevoOperator.execute()` - Triggers sync operation
-- `HevoPipelineHook.trigger_pipeline_sync_async()` - Direct sync triggering
-
-**Request**:
-```http
-POST /api/v1/pipelines/123/actions/sync-now HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Content-Type: application/json
-Accept: application/json
-```
-
-**Response (Success - 200/204)**:
-```json
-{
-  "message": "Sync triggered successfully",
-  "pipeline_id": 123
-}
-```
-*Note: Response may be 204 No Content with empty body*
-
-**Response (Job Already in Progress - 409 or 500)**:
-```json
-{
-  "error": "Conflict",
-  "message": "A job is already in progress for this pipeline"
-}
-```
-
-**Error Handling**:
-- `409/500` with "job is in progress": Handled by `ensure_new_job` parameter logic
-- `400`: Bad request - pipeline not in valid state (e.g., PAUSED, STOPPED)
-- `401/403`: Authentication error
-- `404`: Pipeline not found
-- `500+`: Server error - automatic retry
-
-**Important Notes**:
-- Jobs may take 5-15 seconds to appear in the jobs list after triggering
-- If a job is already running, API behavior depends on pipeline configuration
-- Use `ensure_new_job=True` to explicitly fail if job already exists
-
----
-
-#### 3. Trigger Pipeline Resync
-
-**Endpoint**: `POST /api/v1/pipelines/{pipeline_id}/actions/resync`
-
-**Description**: Triggers a full historical resync for the specified pipeline, re-ingesting all data from the source. Unlike sync-now, this does not require the pipeline to be in any specific state.
-
-**Used By**:
-- `HevoOperator.execute()` - When `action=PipelineAction.RESYNC`
-- `HevoPipelineHook.resync_pipeline_sync()` - Direct resync triggering
-
-**Request (Default)**:
-```http
-POST /api/v1/pipelines/123/actions/resync HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Content-Type: application/json
-Accept: application/json
-
-{
-  "drop_and_load": false
-}
-```
-
-**Request (With Drop and Load)**:
-```http
-POST /api/v1/pipelines/123/actions/resync HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Content-Type: application/json
-Accept: application/json
-
-{
-  "drop_and_load": true
-}
-```
-
-**Request Body Parameters**:
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `drop_and_load` | `bool` | No | `false` | If `true`, drops existing destination tables before loading. Ensures a clean slate by recreating tables from scratch. |
-
-**Response (Success - 200/204)**:
-```json
-{
-  "message": "Resync triggered successfully",
-  "pipeline_id": 123
-}
-```
-*Note: Response may be 204 No Content with empty body*
-
-**Error Handling**:
-- `401/403`: Authentication error
-- `404`: Pipeline not found
-- `500+`: Server error - automatic retry
-
-**Important Notes**:
-- Triggers a full historical data reload from the source
-- Does not require pipeline validation or specific state
-- Jobs may take 5-15 seconds to appear in the jobs list after triggering
-- Use for reprocessing data after schema changes, corruption recovery, or destination migration
-- **Default job type**: Tracks `TRUNCATE_AND_LOAD` job type (operator defaults to this)
-- Set `drop_and_load=true` to drop and recreate destination tables for a completely clean reload
-
-**Comparison with Sync-Now**:
-
-| Feature | sync-now | resync |
-|---------|----------|--------|
-| Validation Required | Yes (INITIALIZED state) | No |
-| Data Scope | Incremental updates | Full historical reload |
-| Honors ensure_new_job | Yes | No |
-| Default Job Type | `INCREMENTAL` | `TRUNCATE_AND_LOAD` |
-| Drop and Load Support | No | Yes (via `drop_and_load` param) |
-| Typical Duration | Minutes | Hours (depending on data volume) |
-| Use Case | Regular scheduled syncs | Schema changes, recovery, migration |
-
----
-
-#### 4. List Pipeline Jobs
-
-**Endpoint**: `GET /api/v1/pipelines/{pipeline_id}/jobs`
-
-**Description**: Lists all jobs for a pipeline with cursor-based pagination. Used for discovering active jobs by type.
-
-**Used By**:
-- `HevoOperator.execute()` - Finds active job after triggering
-- `HevoSensor.poke()` / `HevoSensor._get_job_id()` - Auto-discovers active job
-- `HevoTrigger.run()` - Auto-discovers active job in deferrable mode
-- `HevoPipelineHook.find_active_job_by_type_async()` - Job discovery
-
-**Request**:
-```http
-GET /api/v1/pipelines/123/jobs?limit=10&cursor=abc123 HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Accept: application/json
-```
-
-**Query Parameters**:
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | `int` | No | `10` | Number of jobs per page (max: 100) |
-| `cursor` | `string` | No | `null` | Pagination cursor for next page |
-
-**Response (Success - 200)**:
-```json
-{
-  "data": [
-    {
-      "job_id": "job_abc123",
-      "type": "INCREMENTAL",
-      "status": "IN_PROGRESS",
-      "created_at": "2024-01-15T10:00:00Z",
-      "started_at": "2024-01-15T10:01:00Z",
-      "statistics": {
-        "rows_loaded": 5000,
-        "rows_failed": 10
-      }
-    },
-    {
-      "job_id": "job_xyz789",
-      "type": "HISTORICAL",
-      "status": "COMPLETED",
-      "created_at": "2024-01-14T08:00:00Z",
-      "started_at": "2024-01-14T08:01:00Z",
-      "completed_at": "2024-01-14T09:30:00Z",
-      "statistics": {
-        "rows_loaded": 1000000,
-        "rows_failed": 0
-      }
-    }
-  ],
-  "has_more": true,
-  "next_cursor": "cursor_next_page",
-  "count": 2
-}
-```
-
-**Response Fields**:
-- `data`: Array of job objects
-- `has_more`: Boolean indicating if more pages exist
-- `next_cursor`: Cursor string for next page (null if no more pages)
-- `count`: Number of jobs in current page
-
-**Job Types**:
-- `INCREMENTAL`: Regular incremental sync
-- `HISTORICAL`: Historical data backfill
-- `TRUNCATE_AND_LOAD`: Full reload with truncate
-- `UNKNOWN`: Unmapped/future job types (handled gracefully)
-
-**Job Statuses**:
-- `IN_PROGRESS`: Job currently running
-- `QUEUED`: Job waiting to start
-- `PENDING`: Job scheduled
-- `COMPLETED`: Job finished successfully
-- `COMPLETED_WITH_FAILURES`: Job finished but some records failed
-- `FAILED`: Job failed completely
-- `CANCELLED`: Job was cancelled
-- `SKIPPED`: Job was skipped
-- `DEFERRED`: Job deferred
-- `DEFERRED_WITH_FAILURES`: Job deferred with failures
-- `UNKNOWN`: Unmapped/future statuses (handled gracefully)
-
-**Error Handling**:
-- `404`: Pipeline not found
-- `401/403`: Authentication error
-- `500+`: Server error - automatic retry
-
-**Pagination Example**:
-```python
-# First page
-GET /api/v1/pipelines/123/jobs?limit=10
-
-# Second page using cursor from first response
-GET /api/v1/pipelines/123/jobs?limit=10&cursor=abc123def456
-
-# Continue until has_more=false
-```
-
----
-
-#### 5. Get Job Status
-
-**Endpoint**: `GET /api/v1/pipelines/{pipeline_id}/jobs/{job_id}`
-
-**Description**: Retrieves detailed status and statistics for a specific job.
-
-**Used By**:
-- `HevoOperator._wait_synchronously()` - Polls job status in synchronous mode
-- `HevoSensor.poke()` - Checks job completion
-- `HevoTrigger.run()` - Polls job status in async mode
-- `HevoPipelineHook.get_job_completion_status_async()` - Gets job status
-
-**Request**:
-```http
-GET /api/v1/pipelines/123/jobs/job_abc123 HTTP/1.1
-Host: us.hevodata.com
-Authorization: Basic <base64-encoded-credentials>
-User-Agent: hevo_airflow_provider-airflow/{version}
-Accept: application/json
-```
-
-
-**Status Mapping**:
-
-The provider maps Hevo API statuses to four canonical states:
-
-| API Status                | Mapped Status | Success | Notes |
-|---------------------------|---------------|---------|-------|
-| `COMPLETED`               | `completed` | ✅ Yes | Job finished successfully |
-| `COMPLETED_WITH_FAILURES` | `completed_with_failures` | ⚠️ Conditional | Success if `accept_completed_with_failures=True`, failure otherwise |
-| `FAILED`                  | `failed` | ❌ No | Job failed completely |
-| `CANCELLED`               | `failed` | ❌ No | Job was cancelled |
-| `SKIPPED`                 | `failed` | ❌ No | Job was skipped |
-| `DEFERRED`                | `failed` | ❌ No | Job deferred (treated as failure) |
-| `DEFERRED_WITH_FAILURES`  | `failed` | ❌ No | Job deferred with errors |
-| `IN_PROGRESS`             | `pending` | ⏳ Pending | Job still running |
-| `QUEUED`                  | `pending` | ⏳ Pending | Job waiting to start |
-| `PENDING`                 | `pending` | ⏳ Pending | Job scheduled |
-| `UNKNOWN`                 | `pending` | ⏳ Pending | Unknown status (continues monitoring) |
-
-**Error Handling**:
-- `404`: Job not found (may not have been created yet after trigger)
-- `401/403`: Authentication error
-- `500+`: Server error - automatic retry
