@@ -8,6 +8,7 @@ from airflow.exceptions import AirflowException
 from airflow.hevo.hooks.base import BaseHevoHook
 from airflow.hevo.models import Job, PaginatedJobsResponse, Pipeline
 from airflow.hevo.models.job import JobCompletionStatus, JobStatus, JobType
+from airflow.hevo.models.object import PaginatedObjectsResponse, PipelineObject
 from airflow.hevo.models.pipeline import PipelineStatus
 
 
@@ -354,6 +355,50 @@ class HevoPipelineHook(BaseHevoHook):
             method="GET", endpoint=f"/api/v1/pipelines/{pipeline_id}/jobs/{job_id}/objects", params=params
         )
 
+    async def list_pipeline_objects_async(
+        self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
+    ) -> PaginatedObjectsResponse:
+        """
+        List all objects (tables/collections) in a pipeline (async).
+
+        Returns paginated list of pipeline objects with basic information including
+        source and destination namespaces, status, and field count.
+
+        :param pipeline_id: Unique pipeline identifier.
+        :param limit: Maximum number of objects to return per page (default: 100).
+        :param cursor: Pagination cursor for fetching next page of results.
+        :returns: PaginatedObjectsResponse with list of PipelineObject models.
+        :raises AirflowException: For API errors (auth, network, server errors).
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+
+        response = await self.execute_api_request_async(
+            method="GET",
+            endpoint=f"/api/v1/pipelines/{pipeline_id}/objects",
+            params=params,
+        )
+        return PaginatedObjectsResponse.model_validate(response)
+
+    async def get_pipeline_object_async(self, pipeline_id: int, object_id: str) -> PipelineObject:
+        """
+        Get full details of a specific pipeline object (async).
+
+        Returns complete object information including field mappings with
+        source and destination names/types.
+
+        :param pipeline_id: Unique pipeline identifier.
+        :param object_id: Unique object identifier (UUID).
+        :returns: PipelineObject model with full details including fields.
+        :raises AirflowException: For API errors (auth, network, server errors, object not found).
+        """
+        response = await self.execute_api_request_async(
+            method="GET",
+            endpoint=f"/api/v1/pipelines/{pipeline_id}/objects/{object_id}",
+        )
+        return PipelineObject.model_validate(response)
+
     # Synchronous Wrappers
     # These methods wrap the async methods above using asyncio.run()
 
@@ -450,3 +495,21 @@ class HevoPipelineHook(BaseHevoHook):
         See get_job_objects_async() for full documentation.
         """
         return asyncio.run(self.get_job_objects_async(pipeline_id, job_id, limit, cursor))
+
+    def list_pipeline_objects_sync(
+        self, pipeline_id: int, limit: int = 100, cursor: Optional[str] = None
+    ) -> PaginatedObjectsResponse:
+        """
+        List all objects (tables/collections) in a pipeline (sync wrapper).
+
+        See list_pipeline_objects_async() for full documentation.
+        """
+        return asyncio.run(self.list_pipeline_objects_async(pipeline_id, limit, cursor))
+
+    def get_pipeline_object_sync(self, pipeline_id: int, object_id: str) -> PipelineObject:
+        """
+        Get full details of a specific pipeline object (sync wrapper).
+
+        See get_pipeline_object_async() for full documentation.
+        """
+        return asyncio.run(self.get_pipeline_object_async(pipeline_id, object_id))

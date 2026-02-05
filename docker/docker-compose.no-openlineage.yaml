@@ -1,0 +1,26 @@
+# Docker Compose for Testing WITHOUT OpenLineage
+# Runs Airflow with Hevo Provider but NO OpenLineage integration
+#
+# Usage:
+#   cd docker
+#   docker compose -f docker-compose.no-openlineage.yaml up -d --build
+#
+# Access:
+#   - Airflow UI: http://localhost:8080
+
+services:
+  # Airflow with Hevo Provider (NO OpenLineage)
+  airflow:
+    build:
+      context: ..
+      dockerfile: docker/airflow-3.0-no-openlineage/Dockerfile
+    container_name: hevo-airflow-no-ol
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0
+    volumes:
+      # Mount DAG examples
+      - ../dag_examples:/opt/airflow/dag_examples
+      # Mount source code for development (changes reflect without rebuild)
+      - ../src:/opt/hevo-airflow-provider/src:rw

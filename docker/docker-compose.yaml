@@ -1,0 +1,81 @@
+# Docker Compose for End-to-End OpenLineage Testing
+# Runs Airflow with Hevo Provider + Marquez for lineage visualization
+#
+# Usage:
+#   cd docker
+#   docker compose up -d --build
+#
+# Access:
+#   - Airflow UI: http://localhost:8080
+#   - Marquez UI: http://localhost:3000
+#   - Marquez API: http://localhost:5000
+
+services:
+  # Marquez Database
+  marquez-db:
+    image: postgres:14
+    container_name: marquez-db
+    environment:
+      - POSTGRES_USER=marquez
+      - POSTGRES_PASSWORD=marquez
+      - POSTGRES_DB=marquez
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marquez"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Marquez API (OpenLineage backend)
+  marquez:
+    image: marquezproject/marquez:latest
+    container_name: marquez-api
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      - MARQUEZ_PORT=5000
+      - MARQUEZ_ADMIN_PORT=5001
+      - POSTGRES_HOST=marquez-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=marquez
+      - POSTGRES_USER=marquez
+      - POSTGRES_PASSWORD=marquez
+    depends_on:
+      marquez-db:
+        condition: service_healthy
+
+  # Marquez Web UI
+  marquez-web:
+    image: marquezproject/marquez-web:latest
+    container_name: marquez-web
+    ports:
+      - "3000:3000"
+    environment:
+      - MARQUEZ_HOST=marquez
+      - MARQUEZ_PORT=5000
+      - WEB_PORT=3000
+    depends_on:
+      - marquez
+
+  # Airflow with Hevo Provider + OpenLineage
+  airflow:
+    build:
+      context: ..
+      dockerfile: docker/airflow-3.0/Dockerfile
+    container_name: hevo-airflow
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0
+      # OpenLineage configuration - points to Marquez container
+      - OPENLINEAGE_URL=http://marquez:5000
+      - OPENLINEAGE_NAMESPACE=hevo-airflow
+      # Increase OpenLineage timeout to allow object fetching to complete
+      - AIRFLOW__OPENLINEAGE__EXECUTION_TIMEOUT=60
+    volumes:
+      # Mount DAG examples
+      - ../dag_examples:/opt/airflow/dag_examples
+      # Mount source code for development (changes reflect without rebuild)
+      - ../src:/opt/hevo-airflow-provider/src:rw
+    depends_on:
+      - marquez

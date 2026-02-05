@@ -1,16 +1,11 @@
-# Dockerfile for Airflow 3.0.x
-# Uses official Apache Airflow Docker image as base
-# For running Hevo Airflow Provider example DAGs
+# Dockerfile for Airflow 3.0.x WITHOUT OpenLineage
+# Used to test that Hevo provider works gracefully when OpenLineage is not installed
 FROM apache/airflow:3.0.6-python3.12
 
 # Set environment variables
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=False \
     AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dag_examples \
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
-
-# OpenLineage configuration (can be overridden at runtime)
-ENV OPENLINEAGE_URL=http://marquez:5000 \
-    OPENLINEAGE_NAMESPACE=hevo-airflow
 
 # Switch to root to install system dependencies
 USER root
@@ -35,8 +30,8 @@ RUN mkdir -p /opt/airflow/dag_examples /opt/airflow/logs
 # Copy Hevo provider source code
 COPY --chown=airflow:airflow . /opt/hevo-airflow-provider
 
-# Copy requirements file
-COPY --chown=airflow:airflow docker/airflow-3.0/requirements.txt ./requirements.txt
+# Copy requirements file (WITHOUT OpenLineage)
+COPY --chown=airflow:airflow docker/airflow-3.0-no-openlineage/requirements.txt ./requirements.txt
 
 # Install additional dependencies and Hevo provider
 RUN pip install --no-cache-dir -r requirements.txt && \
@@ -50,6 +45,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD airflow jobs check --job-type SchedulerJob --hostname "$(hostname)"
 
 # Default command - run Airflow standalone
-# This will automatically initialize the database and create an admin user
 CMD ["airflow", "standalone"]
-

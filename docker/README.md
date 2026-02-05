@@ -10,7 +10,8 @@ This directory contains Docker configurations for running the Hevo Airflow Provi
 4. [Configuration](#configuration)
 5. [Container Management](#container-management)
 6. [Development Workflow](#development-workflow)
-7. [Troubleshooting](#troubleshooting)
+7. [OpenLineage Integration](#openlineage-integration)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -352,6 +353,79 @@ docker run -d \
 | **Restart to apply changes?** | ✅ Yes (just restart) | ✅ Yes (after rebuild) |
 | **Best for** | Active development | Testing/Production |
 | **Change feedback** | Seconds | Minutes |
+
+## OpenLineage Integration
+
+The Hevo Airflow Provider supports [OpenLineage](https://openlineage.io/) for data lineage tracking. When enabled, the `HevoPipelineOperator` emits lineage events that capture the data flow from source to destination.
+
+### What Lineage Data is Captured
+
+The Hevo operator emits the following OpenLineage events:
+
+| Event | When | Data Captured |
+|-------|------|---------------|
+| **START** | Task begins | Pipeline documentation (name, ID, source/destination info) |
+| **COMPLETE** | Task finishes | Full lineage with input datasets (source tables) and output datasets (destination tables), including schema information |
+
+### Using Docker Compose with OpenLineage
+
+Two docker compose configurations are provided:
+
+#### Option 1: With OpenLineage (Recommended for lineage tracking)
+
+Uses `docker-compose.yaml` which includes Airflow + Marquez (OpenLineage backend):
+
+```bash
+cd docker
+docker compose up -d --build
+```
+
+**Services started:**
+- **Airflow UI**: http://localhost:8080
+- **Marquez UI**: http://localhost:3000 (view lineage graphs)
+- **Marquez API**: http://localhost:5000
+
+**To view lineage:**
+1. Configure Hevo connection in Airflow UI (Admin → Connections)
+2. Trigger a Hevo pipeline DAG
+3. Open Marquez UI at http://localhost:3000
+4. Navigate to the `hevo-airflow` namespace to see job lineage
+
+#### Option 2: Without OpenLineage
+
+Uses `docker-compose.no-openlineage.yaml` for a lightweight setup:
+
+```bash
+cd docker
+docker compose -f docker-compose.no-openlineage.yaml up -d --build
+```
+
+**Services started:**
+- **Airflow UI**: http://localhost:8080
+
+### Stopping the Services
+
+```bash
+cd docker
+
+# Stop OpenLineage setup
+docker compose down
+
+# Or stop non-OpenLineage setup
+docker compose -f docker-compose.no-openlineage.yaml down
+```
+
+### OpenLineage Environment Variables
+
+The following environment variables are configured in `docker-compose.yaml`:
+
+| Variable | Description | Value |
+|----------|-------------|-------|
+| `OPENLINEAGE_URL` | Marquez API endpoint | `http://marquez:5000` |
+| `OPENLINEAGE_NAMESPACE` | Namespace for lineage events | `hevo-airflow` |
+| `AIRFLOW__OPENLINEAGE__EXECUTION_TIMEOUT` | Timeout for lineage extraction | `60` seconds |
+
+---
 
 ## Troubleshooting
 

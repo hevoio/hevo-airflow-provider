@@ -8,7 +8,10 @@ Apache Airflow provider for Hevo Data's External Orchestration API. Enables trig
 
 ```bash
 # For production use (when published)
-pip install apache-airflow-providers-hevo
+pip install hevo-airflow-provider
+
+# With OpenLineage support (optional - for data lineage tracking)
+pip install hevo-airflow-provider[openlineage]
 
 # For development
 git clone https://github.com/hevoio/hevo-airflow-provider.git
@@ -19,10 +22,11 @@ uv venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
 
+# With OpenLineage for development
+uv pip install -e ".[dev,openlineage]"
 
-# For custom python environment 
+# For custom python environment
 pip install -e /path/to/hevo-airflow-provider
-
 ```
 
 **📖 For detailed setup instructions**, see **[SETUP.md](SETUP.md)** which covers:
@@ -358,6 +362,78 @@ HevoOperator(
 - Job discovery: Retries up to 10 times (configurable via `retry_limit`) to find active job after triggering
 - Network errors: Always retried regardless of status code configuration
 
+### OpenLineage Support (Optional)
+
+The provider includes optional [OpenLineage](https://openlineage.io/) support for data lineage tracking. When enabled, the `HevoPipelineOperator` automatically emits lineage events showing data flow from source to destination.
+
+#### Installation
+
+```bash
+# Without OpenLineage (default) - provider works normally
+pip install hevo-airflow-provider
+
+# With OpenLineage support
+pip install hevo-airflow-provider[openlineage]
+```
+
+#### When to Use OpenLineage
+
+**Install with OpenLineage if you:**
+- Use a data catalog or lineage tool (Marquez, Atlan, DataHub, Collibra, etc.)
+- Need to track data flow across your pipelines for compliance or governance
+- Want visibility into what data Hevo syncs and where it goes
+
+**Skip OpenLineage if you:**
+- Don't have a lineage backend configured in Airflow
+- Don't need data lineage tracking
+- Want to minimize dependencies
+
+#### What Lineage Data is Exposed
+
+When a `HevoPipelineOperator` runs, it emits:
+
+| Data | Description |
+|------|-------------|
+| **Input Datasets** | Source tables/collections being extracted (e.g., `postgres://host/db.schema.users`) |
+| **Output Datasets** | Destination tables being loaded (e.g., `snowflake://account/DB.SCHEMA.hevo_users`) |
+| **Schema Information** | Field names and types for each dataset |
+| **Job Documentation** | Pipeline name, ID, action type, source/destination info |
+
+#### Configuration
+
+OpenLineage requires an Airflow-level configuration to specify where to send lineage events:
+
+```bash
+# Set environment variables for your lineage backend
+export OPENLINEAGE_URL=http://marquez:5000      # Marquez, Atlan, DataHub endpoint
+export OPENLINEAGE_NAMESPACE=my-airflow         # Namespace for your Airflow instance
+export OPENLINEAGE_API_KEY=your-api-key         # If authentication required
+```
+
+Or configure via `airflow.cfg`:
+```ini
+[openlineage]
+transport = http
+url = http://marquez:5000
+namespace = my-airflow
+```
+
+#### Example Lineage
+
+For a Hevo pipeline syncing from PostgreSQL to Snowflake:
+
+```
+Input Datasets:
+  - postgres://source-db/public.users
+  - postgres://source-db/public.orders
+
+Output Datasets:
+  - snowflake://account.snowflakecomputing.com/ANALYTICS.PUBLIC.hevo_users
+  - snowflake://account.snowflakecomputing.com/ANALYTICS.PUBLIC.hevo_orders
+```
+
+The lineage is automatically captured - no code changes needed in your DAGs.
+
 ### Testing
 
 ```bash
@@ -384,8 +460,11 @@ uv run pytest tests/operators/test_hevo_operator.py::test_operator_execute
 ### Key Dependencies
 
 - `apache-airflow>=2.4.0` - Core Airflow
-- `aiohttp==3.13.2` - Async HTTP client
+- `aiohttp>=3.13.2` - Async HTTP client
 - `pydantic>=2.0.0` - Data validation
+
+**Optional Dependencies:**
+- `apache-airflow-providers-openlineage>=1.0.0` - OpenLineage support (install with `[openlineage]` extra)
 
 ### Links
 

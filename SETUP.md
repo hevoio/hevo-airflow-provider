@@ -155,64 +155,97 @@ pip install .
 
 ## Option 4: Docker Setup
 
-The provider includes Docker configurations for testing with different Airflow versions.
+The provider includes Docker configurations for testing with different Airflow versions. Two setup methods are available:
 
-### Step 1: Choose Airflow Version
+- **Docker Compose (Recommended)** - Easiest way to get started
+- **Manual Docker** - More control over individual containers
+
+> **Detailed Documentation**: See [docker/README.md](docker/README.md) for comprehensive Docker setup instructions, troubleshooting, and development workflows.
+
+### Method A: Docker Compose (Recommended)
+
+#### With OpenLineage (Data Lineage Tracking)
+
+Runs Airflow with Marquez for visualizing data lineage:
+
+```bash
+cd docker
+docker compose up -d --build
+```
+
+**Services started:**
+- **Airflow UI**: http://localhost:8080
+- **Marquez UI**: http://localhost:3000 (lineage visualization)
+- **Marquez API**: http://localhost:5000
+
+#### Without OpenLineage (Lightweight)
+
+Runs Airflow only, without lineage tracking:
+
+```bash
+cd docker
+docker compose -f docker-compose.no-openlineage.yaml up -d --build
+```
+
+**Services started:**
+- **Airflow UI**: http://localhost:8080
+
+#### Get Admin Credentials
+
+```bash
+docker logs hevo-airflow 2>&1 | grep -A 5 "admin"
+```
+
+#### Stop Services
+
+```bash
+cd docker
+docker compose down
+# or
+docker compose -f docker-compose.no-openlineage.yaml down
+```
+
+---
+
+### Method B: Manual Docker Build & Run
+
+For more control or when not using docker-compose.
+
+#### Step 1: Choose Airflow Version
 
 Available Docker configurations:
 - `docker/airflow-2.4/` - Airflow 2.4
-- `docker/airflow-3.0/` - Airflow 3.0
+- `docker/airflow-3.0/` - Airflow 3.0 (with OpenLineage)
+- `docker/airflow-3.0-no-openlineage/` - Airflow 3.0 (without OpenLineage)
 
-### Step 2: Navigate to Docker Directory
-
-```bash
-cd docker/airflow-2.4
-# or
-cd docker/airflow-3.0
-```
-
-### Step 3: Build Docker Image
+#### Step 2: Build Docker Image
 
 ```bash
+# From repository root
 docker build -t hevo-airflow-3.0 -f docker/airflow-3.0/Dockerfile .
 ```
 
-This will:
-- Install Apache Airflow (version-specific)
-- Install the Hevo provider in editable mode
-- Setup Airflow database
-- Create admin user
-
-### Step 4: Start Airflow Container
+#### Step 3: Start Airflow Container
 
 ```bash
- docker run -d  \
-      --name hevo-airflow-3.0   \
-      -p 8080:8080   \
-      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
-      -v ./dag_examples:/opt/airflow/dag_examples   \
-      hevo-airflow-3.0
+docker run -d \
+    --name hevo-airflow-3.0 \
+    -p 8080:8080 \
+    -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0 \
+    -v ./dag_examples:/opt/airflow/dag_examples \
+    hevo-airflow-3.0
 ```
 
-### Step 5: Access Airflow UI
+#### Step 4: Access Airflow UI
 
-Open your browser and navigate to `http://localhost:8080`
+Open http://localhost:8080
 
-**Default credentials:**
-- Username: `admin`
-- Password: <generated password> fetch password using the following command
-
-  ```bash
-  docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
-  ```
-
-### Step 6: View Container Logs (Optional)
-
+**Get admin password:**
 ```bash
-docker logs -f hevo-airflow-3.0
+docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
 ```
 
-### Step 7: Stop Container (When Needed)
+#### Step 5: Stop Container
 
 ```bash
 docker stop hevo-airflow-3.0

@@ -15,6 +15,10 @@ from airflow.hevo.trigger import HevoTrigger
 if TYPE_CHECKING:
     from airflow.utils.context import Context
 
+    from airflow.hevo.models.object import PipelineObject
+
+    from .openlineage import OperatorLineage
+
 
 class HevoPipelineOperator(BaseOperator):
     """
@@ -281,6 +285,174 @@ class HevoPipelineOperator(BaseOperator):
             else:
                 self.log.error("Job %s failed with status: %s", job_id, is_completed.value)
                 raise AirflowException(f"Job {job_id} failed.")
+
+    def get_openlineage_facets_on_start(self) -> OperatorLineage | None:
+        """
+        Return OpenLineage facets when the operator starts execution.
+
+        Called by Airflow's OpenLineage integration at task start time.
+        Returns basic pipeline information since job details are not yet available.
+
+        This method is automatically called by the OpenLineage listener when installed.
+        If OpenLineage dependencies are not installed, returns None gracefully.
+
+        :returns: OperatorLineage with job facets, or None if OpenLineage not available.
+        """
+        try:
+            from .openlineage import (  # noqa: PLC0415
+                OPENLINEAGE_AVAILABLE,
+                DocumentationDatasetFacet,
+                OperatorLineage,
+            )
+
+            if not OPENLINEAGE_AVAILABLE:
+                self.log.debug("OpenLineage not available, skipping facet generation")
+                return None
+
+            # Get pipeline info for documentation
+            pipeline = self.hook.get_pipeline_sync(self.pipeline_id)
+            if pipeline is None:
+                self.log.warning("Pipeline %s not found, cannot generate lineage", self.pipeline_id)
+                return None
+
+            # Create job facets with pipeline documentation
+            job_facets = {
+                "documentation": DocumentationDatasetFacet(
+                    description=(
+                        f"Hevo pipeline '{pipeline.name}' (ID: {pipeline.id}) "
+                        f"triggered via {self.action.value} action. "
+                        f"Source: {pipeline.source.source_type} ({pipeline.source.name}) -> "
+                        f"Destination: {pipeline.destination.destination_type} ({pipeline.destination.name})"
+                    )
+                )
+            }
+
+            # At start time, we don't have object-level details yet
+            # Return basic lineage with job facets only
+            return OperatorLineage(
+                inputs=[],
+                outputs=[],
+                job_facets=job_facets,
+                run_facets={},
+            )
+
+        except ImportError:
+            self.log.debug("OpenLineage dependencies not installed")
+            return None
+        except Exception as e:
+            self.log.warning("Failed to generate OpenLineage facets on start: %s", e)
+            return None
+
+    def _fetch_pipeline_objects_for_lineage(self) -> list[PipelineObject]:
+        """
+        Fetch pipeline objects with full details.
+
+        Uses hook methods to fetch pipeline objects with pagination and
+        full object details including fields for schema information.
+
+        :returns: List of PipelineObject models (with field details)
+        """
+        objects: list[PipelineObject] = []
+        cursor = None
+
+        try:
+            while True:
+                # Fetch list of objects using hook method
+                response = self.hook.list_pipeline_objects_sync(
+                    pipeline_id=self.pipeline_id,
+                    limit=100,
+                    cursor=cursor,
+                )
+
+                # For each object, fetch full details including fields
+                for obj in response.data:
+                    try:
+                        full_obj = self.hook.get_pipeline_object_sync(
+                            pipeline_id=self.pipeline_id,
+                            object_id=obj.object_id,
+                        )
+                        objects.append(full_obj)
+                    except Exception as obj_err:
+                        self.log.debug("Failed to fetch object %s details: %s", obj.object_id, obj_err)
+                        # Fall back to basic object data from list
+                        objects.append(obj)
+
+                # Check for more pages
+                if not response.has_more:
+                    break
+                cursor = response.next_cursor
+
+        except Exception as e:
+            self.log.warning("Failed to fetch pipeline objects for lineage: %s", e)
+
+        return objects
+
+    def get_openlineage_facets_on_complete(self, task_instance: Any) -> OperatorLineage | None:
+        """
+        Return OpenLineage facets when the operator completes execution.
+
+        Called by Airflow's OpenLineage integration at task completion.
+        Fetches pipeline objects and creates full dataset lineage including
+        source (input) and destination (output) datasets with schema information.
+
+        This method is automatically called by the OpenLineage listener when installed.
+        If OpenLineage dependencies are not installed, returns None gracefully.
+
+        :param task_instance: Airflow TaskInstance with execution context
+        :returns: OperatorLineage with inputs, outputs, and facets, or None if not available.
+        """
+        try:
+            from .openlineage import (  # noqa: PLC0415
+                OPENLINEAGE_AVAILABLE,
+                DocumentationDatasetFacet,
+                ErrorMessageRunFacet,
+                OperatorLineage,
+            )
+            from .openlineage.utils import create_datasets_from_pipeline_objects  # noqa: PLC0415
+
+            if not OPENLINEAGE_AVAILABLE:
+                self.log.debug("OpenLineage not available, skipping facet generation")
+                return None
+
+            pipeline = self.hook.get_pipeline_sync(self.pipeline_id)
+            if pipeline is None:
+                self.log.warning("Pipeline %s not found, cannot generate lineage", self.pipeline_id)
+                return None
+            # Create job facets with pipeline documentation
+            job_facets = {
+                "documentation": DocumentationDatasetFacet(
+                    description=(
+                        f"Hevo pipeline '{pipeline.name}' (ID: {pipeline.id}) "
+                        f"completed via {self.action.value} action. "
+                        f"Source: {pipeline.source.source_type} ({pipeline.source.name}) -> "
+                        f"Destination: {pipeline.destination.destination_type} ({pipeline.destination.name})"
+                    )
+                )
+            }
+            objects = self._fetch_pipeline_objects_for_lineage()
+            inputs, outputs = create_datasets_from_pipeline_objects(pipeline, objects)
+
+            # Check if task failed and add error facet
+            run_facets: dict[str, object] = {}
+            if task_instance and hasattr(task_instance, "state") and str(task_instance.state) == "failed":
+                run_facets["errorMessage"] = ErrorMessageRunFacet(
+                    message=f"Hevo pipeline {self.pipeline_id} sync failed",
+                    programmingLanguage="python",
+                )
+
+            return OperatorLineage(
+                inputs=inputs,
+                outputs=outputs,
+                job_facets=job_facets,
+                run_facets=run_facets,
+            )
+
+        except ImportError:
+            self.log.debug("OpenLineage dependencies not installed")
+            return None
+        except Exception as e:
+            self.log.warning("Failed to generate OpenLineage facets on complete: %s", e)
+            return None
 
     @cached_property
     def hook(self) -> HevoPipelineHook:

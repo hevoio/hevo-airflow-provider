@@ -5,7 +5,7 @@ from time import sleep
 from typing import TYPE_CHECKING, Any, Optional
 
 from airflow.exceptions import AirflowException
-from airflow.sensors.base import BaseSensorOperator
+from airflow.sdk.bases.sensor import BaseSensorOperator
 
 if TYPE_CHECKING:
     from airflow.utils.context import Context
