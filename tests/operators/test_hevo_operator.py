@@ -553,12 +553,12 @@ class TestHevoOperatorResyncAction:
     def test_resync_action_defaults_to_resync_job_type(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action defaults to RESYNC job type when drop_and_load=False."""
+        """Test RESYNC action defaults to RESYNC_WITH_EVOLVE job type when drop_and_load=False."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
-        # Return a job with RESYNC type
-        resync_job = {**sample_job_response, "type": "RESYNC"}
+        # Return a job with RESYNC_WITH_EVOLVE type
+        resync_job = {**sample_job_response, "type": "RESYNC_WITH_EVOLVE"}
         mock_hook.find_active_job_by_type_sync.return_value = Job(**resync_job)
 
         # Mock get_pipeline_sync to return a pipeline with INITIALIZED status

@@ -37,7 +37,7 @@ class HevoPipelineOperator(BaseOperator):
                   - RESYNC: Full historical resync (waits indefinitely for INITIALIZED state before triggering)
     :param job_type: Type of job to wait for. Defaults intelligently based on action:
                     - SYNC_NOW: JobType.INCREMENTAL (default)
-                    - RESYNC with drop_and_load=False: JobType.RESYNC (default)
+                    - RESYNC with drop_and_load=False: JobType.RESYNC_WITH_EVOLVE (default)
                     - RESYNC with drop_and_load=True: JobType.RESYNC_WITH_DROP_AND_LOAD (default)
                     Used when discovering the active job after triggering.
     :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
@@ -83,8 +83,8 @@ class HevoPipelineOperator(BaseOperator):
         self.connection_id = connection_id
         self.drop_and_load = drop_and_load
         if job_type is None:
-            if action == PipelineAction.RESYNC:
-                self.job_type = JobType.RESYNC_WITH_DROP_AND_LOAD if drop_and_load else JobType.RESYNC
+            if action == PipelineAction.RESYNC_WITH_EVOLVE:
+                self.job_type = JobType.RESYNC_WITH_DROP_AND_LOAD if drop_and_load else JobType.RESYNC_WITH_EVOLVE
             else:
                 self.job_type = JobType.INCREMENTAL
         else:
