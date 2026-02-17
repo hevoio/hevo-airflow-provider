@@ -128,7 +128,7 @@ sync_task = HevoOperator(
 - `wait_for_completion` (bool, default: `True`): Wait for job to complete before returning
 - `ensure_new_job` (bool, default: `True`): Fail if job already in progress for pipeline (prevents duplicate jobs by default) - applies to SYNC_NOW only
 - `accept_completed_with_failures` (bool, default: `False`): Treat partial failures as success
-- `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `TRUNCATE_AND_LOAD` for RESYNC
+- `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `RESYNC` for RESYNC with `drop_and_load=False`, and `RESYNC_WITH_DROP_AND_LOAD` for RESYNC with `drop_and_load=True`
 - `drop_and_load` (bool, default: `False`): Drop and recreate destination tables before loading (RESYNC action only)
 - `poll_interval` (int, default: `15`): Seconds between status checks
 - `retry_limit` (int, default: `10`): Maximum attempts to find active job after triggering

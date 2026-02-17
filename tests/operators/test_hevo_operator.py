@@ -550,23 +550,23 @@ class TestHevoOperatorResyncAction:
         mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
         assert result == "550e8400-e29b-41d4-a716-446655440001"
 
-    def test_resync_action_defaults_to_truncate_and_load_job_type(
+    def test_resync_action_defaults_to_resync_job_type(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action defaults to TRUNCATE_AND_LOAD job type."""
+        """Test RESYNC action defaults to RESYNC job type when drop_and_load=False."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
-        # Return a job with TRUNCATE_AND_LOAD type
-        truncate_job = {**sample_job_response, "type": "TRUNCATE_AND_LOAD"}
-        mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
+        # Return a job with RESYNC type
+        resync_job = {**sample_job_response, "type": "RESYNC"}
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**resync_job)
 
         # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
         mock_pipeline = MagicMock()
         mock_pipeline.status = PipelineStatus.INITIALIZED
         mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
-        # Don't specify job_type - should default to TRUNCATE_AND_LOAD for RESYNC
+        # Don't specify job_type - should default to RESYNC for RESYNC action with drop_and_load=False
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -576,11 +576,42 @@ class TestHevoOperatorResyncAction:
         )
         result = op.execute(mock_airflow_context)
 
-        # Verify it's looking for TRUNCATE_AND_LOAD job type
-        mock_hook.find_active_job_by_type_sync.assert_called_once_with(
-            pipeline_id=123, job_type=JobType.TRUNCATE_AND_LOAD
+        # Verify it's looking for RESYNC job type
+        mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.RESYNC)
+        assert result == resync_job["job_id"]
+
+    def test_resync_action_with_drop_and_load_defaults_to_resync_with_drop_and_load_job_type(
+        self, mock_hook_class, mock_airflow_context, sample_job_response
+    ) -> None:
+        """Test RESYNC action defaults to RESYNC_WITH_DROP_AND_LOAD job type when drop_and_load=True."""
+        mock_hook = MagicMock()
+        mock_hook_class.return_value = mock_hook
+        mock_hook.resync_pipeline_sync.return_value = None
+        # Return a job with RESYNC_WITH_DROP_AND_LOAD type
+        resync_drop_job = {**sample_job_response, "type": "RESYNC_WITH_DROP_AND_LOAD"}
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**resync_drop_job)
+
+        # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
+        mock_pipeline = MagicMock()
+        mock_pipeline.status = PipelineStatus.INITIALIZED
+        mock_hook.get_pipeline_sync.return_value = mock_pipeline
+
+        # Don't specify job_type - should default to RESYNC_WITH_DROP_AND_LOAD for RESYNC with drop_and_load=True
+        op = HevoPipelineOperator(
+            task_id="test_task",
+            connection_id="test_conn",
+            pipeline_id=123,
+            action=PipelineAction.RESYNC,
+            drop_and_load=True,
+            wait_for_completion=False,
         )
-        assert result == truncate_job["job_id"]
+        result = op.execute(mock_airflow_context)
+
+        # Verify it's looking for RESYNC_WITH_DROP_AND_LOAD job type
+        mock_hook.find_active_job_by_type_sync.assert_called_once_with(
+            pipeline_id=123, job_type=JobType.RESYNC_WITH_DROP_AND_LOAD
+        )
+        assert result == resync_drop_job["job_id"]
 
     def test_sync_now_action_defaults_to_incremental_job_type(
         self, mock_hook_class, mock_airflow_context, sample_job_response
@@ -613,7 +644,7 @@ class TestHevoOperatorResyncAction:
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
-        # Return an incremental job (not TRUNCATE_AND_LOAD)
+        # Return an incremental job (not RESYNC)
         incremental_job = {**sample_job_response, "type": "INCREMENTAL"}
         mock_hook.find_active_job_by_type_sync.return_value = Job(**incremental_job)
 
@@ -633,7 +664,7 @@ class TestHevoOperatorResyncAction:
         )
         result = op.execute(mock_airflow_context)
 
-        # Verify it's looking for INCREMENTAL job type (not default TRUNCATE_AND_LOAD)
+        # Verify it's looking for INCREMENTAL job type (not default RESYNC)
         mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.INCREMENTAL)
         assert result == incremental_job["job_id"]
 
@@ -644,8 +675,8 @@ class TestHevoOperatorResyncAction:
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
-        truncate_job = {**sample_job_response, "type": "TRUNCATE_AND_LOAD"}
-        mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
+        resync_drop_job = {**sample_job_response, "type": "RESYNC_WITH_DROP_AND_LOAD"}
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**resync_drop_job)
 
         # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
         mock_pipeline = MagicMock()
@@ -671,7 +702,7 @@ class TestHevoOperatorResyncAction:
         # Verify trigger was created with correct job_id
         trigger = exc_info.value.trigger
         assert trigger.pipeline_id == 123
-        assert trigger.job_id == truncate_job["job_id"]
+        assert trigger.job_id == resync_drop_job["job_id"]
 
     def test_resync_action_drop_and_load_with_synchronous_wait(
         self, mock_hook_class, mock_airflow_context, sample_job_response
@@ -680,8 +711,8 @@ class TestHevoOperatorResyncAction:
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
-        truncate_job = {**sample_job_response, "type": "TRUNCATE_AND_LOAD"}
-        mock_hook.find_active_job_by_type_sync.return_value = Job(**truncate_job)
+        resync_drop_job = {**sample_job_response, "type": "RESYNC_WITH_DROP_AND_LOAD"}
+        mock_hook.find_active_job_by_type_sync.return_value = Job(**resync_drop_job)
         mock_hook.get_job_completion_status_sync.return_value = JobCompletionStatus.COMPLETED
 
         # Mock get_pipeline_sync to return a pipeline with INITIALIZED status
@@ -705,7 +736,7 @@ class TestHevoOperatorResyncAction:
         # Verify drop_and_load=True was passed
         mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
         mock_hook.get_job_completion_status_sync.assert_called_once()
-        assert result == truncate_job["job_id"]
+        assert result == resync_drop_job["job_id"]
 
     def test_resync_waits_for_pipeline_initialized(
         self, mock_hook_class, mock_airflow_context, sample_job_response, sample_pipeline_response

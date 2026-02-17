@@ -31,7 +31,7 @@ The `HevoOperator` triggers and optionally waits for Hevo pipeline syncs or resy
 | Parameter | Type | Default                                                                             | Description |
 |-----------|------|-------------------------------------------------------------------------------------|-------------|
 | `action` | `PipelineAction` | `PipelineAction.SYNC_NOW`                                                           | Pipeline action to trigger:<br>- `SYNC_NOW`: Regular incremental sync (POST `/pipelines/{id}/actions/sync-now`). Requires pipeline in INITIALIZED state.<br>- `RESYNC`: Full historical resync (POST `/pipelines/{id}/actions/resync`). Re-ingests all data from source. |
-| `job_type` | `JobType` or `str` | **Intelligent default**<br>`INCREMENTAL` (SYNC_NOW)<br>`TRUNCATE_AND_LOAD` (RESYNC) | Type of job to wait for when discovering the active job after triggering. Defaults intelligently based on action. Can be explicitly set to `INCREMENTAL`, `HISTORICAL`, or `TRUNCATE_AND_LOAD`. |
+| `job_type` | `JobType` or `str` | **Intelligent default**<br>`INCREMENTAL` (SYNC_NOW)<br>`RESYNC` (RESYNC with drop_and_load=False)<br>`RESYNC_WITH_DROP_AND_LOAD` (RESYNC with drop_and_load=True) | Type of job to wait for when discovering the active job after triggering. Defaults intelligently based on action and drop_and_load parameter. Can be explicitly set to `INCREMENTAL`, `HISTORICAL`, `RESYNC`, or `RESYNC_WITH_DROP_AND_LOAD`. |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default)                                               | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`. |
 | `poll_interval` | `int` | `15`                                                                                | Seconds between status checks when waiting for completion. |
 | `retry_limit` | `int` | `10`                                                                                | Maximum number of attempts to find the active job after triggering sync. |
@@ -57,7 +57,9 @@ The operator supports two types of pipeline actions:
    - **No validation required** - can be triggered on any pipeline
    - Re-ingests all data from the source (full historical reload)
    - Ignores `ensure_new_job` parameter
-   - **Default job type**: `TRUNCATE_AND_LOAD`
+   - **Default job type**:
+     - `RESYNC` when `drop_and_load=False` (default)
+     - `RESYNC_WITH_DROP_AND_LOAD` when `drop_and_load=True`
    - **Optional**: `drop_and_load` parameter to drop/recreate destination tables
    - **Use Cases**:
      - Reprocessing data after schema changes
@@ -179,7 +181,7 @@ The `HevoSensor` monitors Hevo pipeline job completion with auto-discovery suppo
 | Parameter | Type | Default                               | Description |
 |-----------|------|---------------------------------------|-------------|
 | `job_id` | `str` | `None`                                | Optional job identifier. If provided, monitors this specific job. If not provided, discovers the active job via auto-discovery. Supports Jinja templating (e.g., XCom pulls). |
-| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL`                 | Job type for auto-discovery. Only used when `job_id` is not provided. Can be `INCREMENTAL`, `HISTORICAL`, or `TRUNCATE_AND_LOAD`. |
+| `job_type` | `JobType` or `str` | `JobType.INCREMENTAL`                 | Job type for auto-discovery. Only used when `job_id` is not provided. Can be `INCREMENTAL`, `HISTORICAL`, `RESYNC`, or `RESYNC_WITH_DROP_AND_LOAD`. |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default) | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`. |
 | `poke_interval` | `int` | `15`                                  | Seconds between status checks when polling for job completion. |
 | `accept_completed_with_failures` | `bool` | `False`                               | Treat `COMPLETED_WITH_FAILURES` status as success. |
@@ -346,7 +348,7 @@ hook_no_retry = HevoPipelineHook(
 |-----------|----------|--------|---------|------|---------|-------------|
 | `pipeline_id` | ✅ | ✅ | ✅ | ✅ | Required | Hevo pipeline identifier |
 | `job_id` | ❌ | ✅ | ✅ | ❌ | `None` | Explicit job ID to monitor |
-| `job_type` | ✅ | ✅ | ✅ | ❌ | Intelligent default | Job type for discovery/triggering (INCREMENTAL for SYNC_NOW, TRUNCATE_AND_LOAD for RESYNC) |
+| `job_type` | ✅ | ✅ | ✅ | ❌ | Intelligent default | Job type for discovery/triggering (INCREMENTAL for SYNC_NOW, RESYNC/RESYNC_WITH_DROP_AND_LOAD for RESYNC based on drop_and_load) |
 | `action` | ✅ | ❌ | ❌ | ❌ | `SYNC_NOW` | Pipeline action type (SYNC_NOW or RESYNC) |
 | `connection_id` | ✅ | ✅ | ✅ | ✅ | `hevo_airflow_conn_id` | Airflow connection ID |
 
@@ -535,7 +537,7 @@ HevoPipelineOperator(
     task_id="resync_pipeline",
     pipeline_id=123,
     action=PipelineAction.RESYNC,  # Full historical reload
-    job_type=JobType.TRUNCATE_AND_LOAD,  # Default for RESYNC, can be omitted
+    job_type=JobType.RESYNC,  # Default for RESYNC with drop_and_load=False, can be omitted
     deferrable=True,
     wait_for_completion=True,
     poll_interval=30,  # Less frequent polling for long-running resync jobs
@@ -549,7 +551,7 @@ HevoPipelineOperator(
     pipeline_id=123,
     action=PipelineAction.RESYNC,
     drop_and_load=True,  # Drop existing tables before loading
-    job_type=JobType.TRUNCATE_AND_LOAD,  # Monitors TRUNCATE_AND_LOAD job type
+    job_type=JobType.RESYNC_WITH_DROP_AND_LOAD,  # Default for RESYNC with drop_and_load=True, can be omitted
     deferrable=True,
     wait_for_completion=True,
     poll_interval=30,

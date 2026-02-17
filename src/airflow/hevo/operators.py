@@ -37,7 +37,8 @@ class HevoPipelineOperator(BaseOperator):
                   - RESYNC: Full historical resync (waits indefinitely for INITIALIZED state before triggering)
     :param job_type: Type of job to wait for. Defaults intelligently based on action:
                     - SYNC_NOW: JobType.INCREMENTAL (default)
-                    - RESYNC: JobType.TRUNCATE_AND_LOAD (default)
+                    - RESYNC with drop_and_load=False: JobType.RESYNC (default)
+                    - RESYNC with drop_and_load=True: JobType.RESYNC_WITH_DROP_AND_LOAD (default)
                     Used when discovering the active job after triggering.
     :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
     :param poll_interval: Seconds between status checks when waiting (default: 15).
@@ -80,8 +81,12 @@ class HevoPipelineOperator(BaseOperator):
         self.action = action
         self.poll_interval = poll_interval
         self.connection_id = connection_id
+        self.drop_and_load = drop_and_load
         if job_type is None:
-            self.job_type = JobType.TRUNCATE_AND_LOAD if action == PipelineAction.RESYNC else JobType.INCREMENTAL
+            if action == PipelineAction.RESYNC:
+                self.job_type = JobType.RESYNC_WITH_DROP_AND_LOAD if drop_and_load else JobType.RESYNC
+            else:
+                self.job_type = JobType.INCREMENTAL
         else:
             self.job_type = job_type
         self.deferrable = deferrable
@@ -89,7 +94,6 @@ class HevoPipelineOperator(BaseOperator):
         self.wait_for_completion = wait_for_completion
         self.accept_completed_with_failures = accept_completed_with_failures
         self.ensure_new_job = ensure_new_job
-        self.drop_and_load = drop_and_load
         super().__init__(**kwargs)
 
     def execute(self, context: Context) -> None | str:  # noqa: ARG002
