@@ -63,8 +63,8 @@ class ResyncMode(str, Enum):
     Resync mode for pipeline resync operations.
 
     Defines how destination tables are handled during a resync:
-    - EVOLVE_AND_MERGE: Evolve the destination schema and merge data (default)
-    - DROP_AND_LOAD: Drop existing destination tables and reload from scratch
+    - EVOLVE_AND_MERGE: Triggers historical resync without dropping destination tables(default).
+    - DROP_AND_LOAD: drops existing destination tables before loading.Ensures a clean slate by recreating tables from scratch
     """
 
     EVOLVE_AND_MERGE = "EVOLVE_AND_MERGE"

@@ -306,8 +306,8 @@ class HevoPipelineHook(BaseHevoHook):
 
         :param pipeline_id: Unique pipeline identifier.
         :param resync_mode: Controls how destination tables are handled during resync.
-                           ``EVOLVE_AND_MERGE`` evolves schema and merges data (default).
-                           ``DROP_AND_LOAD`` drops and recreates tables from scratch.
+                           ``EVOLVE_AND_MERGE`` Triggers historical resync without dropping destination tables(default).
+                           ``DROP_AND_LOAD``drops existing destination tables before loading.Ensures a clean slate by recreating tables from scratch
         :raises AirflowException: For API errors (auth, network, server errors).
         """
         self.log.info("Triggering resync for pipeline %s (resync_mode=%s)", pipeline_id, resync_mode.value)

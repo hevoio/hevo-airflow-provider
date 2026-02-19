@@ -57,8 +57,9 @@ class HevoPipelineOperator(BaseOperator):
                           Only applies to SYNC_NOW action.
     :param resync_mode: Controls how destination tables are handled during resync
                        (default: ResyncMode.EVOLVE_AND_MERGE). Only applies to RESYNC action.
-                       - EVOLVE_AND_MERGE: Evolve the destination schema and merge data
-                       - DROP_AND_LOAD: Drop existing destination tables and reload from scratch
+                       - EVOLVE_AND_MERGE: Triggers historical resync without dropping destination tables(default).
+                       - DROP_AND_LOAD: drops existing destination tables before loading.
+                             Ensures a clean slate by recreating tables from scratch.
     """
 
     template_fields = ("pipeline_id",)

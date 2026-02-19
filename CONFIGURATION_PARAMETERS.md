@@ -31,7 +31,7 @@ The `HevoOperator` triggers and optionally waits for Hevo pipeline syncs or resy
 | Parameter | Type | Default                                                                                                                                                                       | Description                                                                                                                                                                                                                                                              |
 |-----------|------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `action` | `PipelineAction` | `PipelineAction.SYNC_NOW`                                                                                                                                                     | Pipeline action to trigger:<br>- `SYNC_NOW`: Regular incremental sync (POST `/pipelines/{id}/actions/sync-now`). Requires pipeline in INITIALIZED state.<br>- `RESYNC`: Full historical resync (POST `/pipelines/{id}/actions/resync`). Re-ingests all data from source. |
-| `job_type` | `JobType` or `str` | **Intelligent default**<br>`INCREMENTAL` (SYNC_NOW)<br>`RESYNC_WITH_EVOLVE` (RESYNC with drop_and_load=False)<br>`RESYNC_WITH_DROP_AND_LOAD` (RESYNC with drop_and_load=True) | Type of job to wait for when discovering the active job after triggering. Defaults intelligently based on action and drop_and_load parameter. Can be explicitly set to `INCREMENTAL`, `HISTORICAL`, `RESYNC_WITH_EVOLVE`, or `RESYNC_WITH_DROP_AND_LOAD`.                |
+| `job_type` | `JobType` or `str` | **Intelligent default**<br>`INCREMENTAL` (SYNC_NOW)<br>`RESYNC_WITH_EVOLVE` (RESYNC with resync_mode=EVOLVE_AND_MERGE)<br>`RESYNC_WITH_DROP_AND_LOAD` (RESYNC with resync_mode=DROP_AND_LOAD) | Type of job to wait for when discovering the active job after triggering. Defaults intelligently based on action and resync_mode parameter. Can be explicitly set to `INCREMENTAL`, `HISTORICAL`, `RESYNC_WITH_EVOLVE`, or `RESYNC_WITH_DROP_AND_LOAD`.                |
 | `connection_id` | `str` | `hevo_airflow_conn_id` (uses default)                                                                                                                                         | Airflow connection ID for Hevo API credentials. If not provided, uses `hevo_airflow_conn_id`.                                                                                                                                                                            |
 | `poll_interval` | `int` | `15`                                                                                                                                                                          | Seconds between status checks when waiting for completion.                                                                                                                                                                                                               |
 | `retry_limit` | `int` | `10`                                                                                                                                                                          | Maximum number of attempts to find the active job after triggering sync.                                                                                                                                                                                                 |
@@ -39,7 +39,7 @@ The `HevoOperator` triggers and optionally waits for Hevo pipeline syncs or resy
 | `wait_for_completion` | `bool` | `True`                                                                                                                                                                        | Wait for the job to complete before returning. If `False`, returns `job_id` immediately via XCom for use with `HevoSensor`.                                                                                                                                              |
 | `accept_completed_with_failures` | `bool` | `False`                                                                                                                                                                       | Treat `COMPLETED_WITH_FAILURES` status as success. Useful when partial failures (e.g., some records failing) are acceptable.                                                                                                                                             |
 | `ensure_new_job` | `bool` | `True`                                                                                                                                                                        | If `True`, fails if a job is already in progress for the pipeline (default behavior). If `False`, proceeds normally even if a job already exists. Useful to prevent triggering duplicate jobs when previous jobs are still running. **Only applies to SYNC_NOW action.** |
-| `drop_and_load` | `bool` | `False`                                                                                                                                                                       | If `True`, drops existing destination tables before loading. **Only applies to RESYNC action.** Useful for completely refreshing data when schema or data quality issues require a clean restart.                                                                        |
+| `resync_mode` | `ResyncMode` | `ResyncMode.EVOLVE_AND_MERGE`                                                                                                                                                 | Controls how destination tables are handled during resync. **Only applies to RESYNC action.**<br>- `EVOLVE_AND_MERGE`: Triggers historical resync without dropping destination tables (default).<br>- `DROP_AND_LOAD`: Drops existing destination tables before loading. Ensures a clean slate by recreating tables from scratch. |
 
 ### Pipeline Actions
 
@@ -58,15 +58,15 @@ The operator supports two types of pipeline actions:
    - Re-ingests all data from the source (full historical reload)
    - Ignores `ensure_new_job` parameter
    - **Default job type**:
-     - `RESYNC_WITH_EVOLVE` when `drop_and_load=False` (default)
-     - `RESYNC_WITH_DROP_AND_LOAD` when `drop_and_load=True`
-   - **Optional**: `drop_and_load` parameter to drop/recreate destination tables
+     - `RESYNC_WITH_EVOLVE` when `resync_mode=EVOLVE_AND_MERGE` (default)
+     - `RESYNC_WITH_DROP_AND_LOAD` when `resync_mode=DROP_AND_LOAD`
+   - **Optional**: `resync_mode` parameter to control destination table handling
    - **Use Cases**:
      - Reprocessing data after schema changes
      - Recovering from data corruption
      - Applying new transformations to historical data
      - Migrating to a new destination with full data reload
-     - Clean slate refresh with `drop_and_load=True`
+     - Clean slate refresh with `resync_mode=ResyncMode.DROP_AND_LOAD`
 
 **Example**:
 ```python
@@ -87,12 +87,14 @@ resync_task = HevoPipelineOperator(
     action=PipelineAction.RESYNC  # Full reload
 )
 
-# Full historical resync with drop_and_load (drops and recreates tables)
+# Full historical resync with DROP_AND_LOAD (drops and recreates tables)
+from airflow.hevo.models.pipeline import ResyncMode
+
 resync_clean_task = HevoPipelineOperator(
     task_id="resync_clean",
     pipeline_id=123,
     action=PipelineAction.RESYNC,
-    drop_and_load=True  # Drop data from existing tables before loading
+    resync_mode=ResyncMode.DROP_AND_LOAD  # Drop data from existing tables before loading
 )
 ```
 
@@ -348,7 +350,7 @@ hook_no_retry = HevoPipelineHook(
 |-----------|----------|--------|---------|------|---------|----------------------------------------------------------------------------------------------------------------------------------------------|
 | `pipeline_id` | ✅ | ✅ | ✅ | ✅ | Required | Hevo pipeline identifier                                                                                                                     |
 | `job_id` | ❌ | ✅ | ✅ | ❌ | `None` | Explicit job ID to monitor                                                                                                                   |
-| `job_type` | ✅ | ✅ | ✅ | ❌ | Intelligent default | Job type for discovery/triggering (INCREMENTAL for SYNC_NOW, RESYNC_WITH_EVOLVE/RESYNC_WITH_DROP_AND_LOAD for RESYNC based on drop_and_load) |
+| `job_type` | ✅ | ✅ | ✅ | ❌ | Intelligent default | Job type for discovery/triggering (INCREMENTAL for SYNC_NOW, RESYNC_WITH_EVOLVE/RESYNC_WITH_DROP_AND_LOAD for RESYNC based on resync_mode) |
 | `action` | ✅ | ❌ | ❌ | ❌ | `SYNC_NOW` | Pipeline action type (SYNC_NOW or RESYNC)                                                                                                    |
 | `connection_id` | ✅ | ✅ | ✅ | ✅ | `hevo_airflow_conn_id` | Airflow connection ID                                                                                                                        |
 
@@ -529,7 +531,7 @@ HevoOperator(
 
 ```python
 from airflow.hevo.models.job import JobType
-from airflow.hevo.models.pipeline import PipelineAction
+from airflow.hevo.models.pipeline import PipelineAction, ResyncMode
 from airflow.hevo.operators import HevoPipelineOperator
 
 # Standard resync (keeps existing destination tables)
@@ -537,7 +539,7 @@ HevoPipelineOperator(
     task_id="resync_pipeline",
     pipeline_id=123,
     action=PipelineAction.RESYNC,  # Full historical reload
-    job_type=JobType.RESYNC_WITH_EVOLVE,  # Default for RESYNC_WITH_EVOLVE with drop_and_load=False, can be omitted
+    job_type=JobType.RESYNC_WITH_EVOLVE,  # Default for RESYNC with resync_mode=EVOLVE_AND_MERGE, can be omitted
     deferrable=True,
     wait_for_completion=True,
     poll_interval=30,  # Less frequent polling for long-running resync jobs
@@ -550,8 +552,8 @@ HevoPipelineOperator(
     task_id="resync_clean_slate",
     pipeline_id=123,
     action=PipelineAction.RESYNC,
-    drop_and_load=True,  # Drop existing tables before loading
-    job_type=JobType.RESYNC_WITH_DROP_AND_LOAD,  # Default for RESYNC with drop_and_load=True, can be omitted
+    resync_mode=ResyncMode.DROP_AND_LOAD,  # Drop existing tables before loading
+    job_type=JobType.RESYNC_WITH_DROP_AND_LOAD,  # Default for RESYNC with resync_mode=DROP_AND_LOAD, can be omitted
     deferrable=True,
     wait_for_completion=True,
     poll_interval=30,

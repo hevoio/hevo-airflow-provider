@@ -129,7 +129,7 @@ sync_task = HevoOperator(
 - `ensure_new_job` (bool, default: `True`): Fail if job already in progress for pipeline (prevents duplicate jobs by default) - applies to SYNC_NOW only
 - `accept_completed_with_failures` (bool, default: `False`): Treat partial failures as success
 - `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `RESYNC_WITH_EVOLVE` for RESYNC with `resync_mode=EVOLVE_AND_MERGE`, and `RESYNC_WITH_DROP_AND_LOAD` for RESYNC with `resync_mode=DROP_AND_LOAD`
-- `resync_mode` (ResyncMode, default: `EVOLVE_AND_MERGE`): Controls how destination tables are handled during resync - `EVOLVE_AND_MERGE` to evolve schema and merge data, `DROP_AND_LOAD` to drop and recreate tables (RESYNC action only)
+- `resync_mode` (ResyncMode, default: `EVOLVE_AND_MERGE`): Controls how destination tables are handled during resync - `EVOLVE_AND_MERGE' to trigger a historical resync without dropping tables, `DROP_AND_LOAD` Drop and recreate destination tables before loading (RESYNC action only)
 - `poll_interval` (int, default: `15`): Seconds between status checks
 - `retry_limit` (int, default: `10`): Maximum attempts to find active job after triggering
 
