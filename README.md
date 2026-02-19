@@ -59,7 +59,7 @@ The provider exposes an async-first hook to interact with the Hevo External Orch
     - `get_pipeline_async(pipeline_id: int) -> dict | None`: fetch pipeline details asynchronously.
     - `_validate_pipeline_async(pipeline_id: int)`: validate pipeline state asynchronously.
     - `trigger_pipeline_sync_async(pipeline_id: int, ensure_new_job: bool = True)`: trigger pipeline sync asynchronously; defaults to failing if a job already exists.
-    - `resync_pipeline_async(pipeline_id: int, drop_and_load: bool = False)`: trigger full historical resync asynchronously.
+    - `resync_pipeline_async(pipeline_id: int, resync_mode: ResyncMode = ResyncMode.EVOLVE_AND_MERGE)`: trigger full historical resync asynchronously.
     - `find_active_job_by_type_async(pipeline_id: int, job_type: str = "INCREMENTAL") -> dict`: find active jobs asynchronously.
     - `get_job_completion_status_async(pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False) -> str`: check job status asynchronously.
 
@@ -67,7 +67,7 @@ The provider exposes an async-first hook to interact with the Hevo External Orch
     - `get_pipeline(pipeline_id: int) -> dict | None`: fetch pipeline details, returning `None` if not found (404).
     - `validate_pipeline(pipeline_id: int)`: ensures the pipeline exists and is in an active (`INITIALIZED`) state.
     - `trigger_pipeline_sync(pipeline_id: int, ensure_new_job: bool = True)`: trigger a sync on the pipeline; by default, raises if a job is already in progress (set to `False` to allow concurrent jobs).
-    - `resync_pipeline_sync(pipeline_id: int, drop_and_load: bool = False)`: trigger full historical resync; drops and recreates tables if `drop_and_load=True`.
+    - `resync_pipeline_sync(pipeline_id: int, resync_mode: ResyncMode = ResyncMode.EVOLVE_AND_MERGE)`: trigger full historical resync; use `ResyncMode.DROP_AND_LOAD` to drop and recreate tables.
     - `find_active_job_by_type(pipeline_id: int, job_type: str = "INCREMENTAL") -> dict`: returns the currently active job of the given type or raises if none is found.
     - `get_job_completion_status(pipeline_id: int, job_id: str, accept_completed_with_failures: bool = False) -> str`: returns one of `"completed"`, `"completed_with_failures"`, `"failed"`, or `"pending"`.
 
@@ -128,8 +128,8 @@ sync_task = HevoOperator(
 - `wait_for_completion` (bool, default: `True`): Wait for job to complete before returning
 - `ensure_new_job` (bool, default: `True`): Fail if job already in progress for pipeline (prevents duplicate jobs by default) - applies to SYNC_NOW only
 - `accept_completed_with_failures` (bool, default: `False`): Treat partial failures as success
-- `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `RESYNC_WITH_EVOLVE` for RESYNC with `drop_and_load=False`, and `RESYNC_WITH_DROP_AND_LOAD` for RESYNC with `drop_and_load=True`
-- `drop_and_load` (bool, default: `False`): Drop and recreate destination tables before loading (RESYNC action only)
+- `job_type` (JobType, intelligent default): Type of job to wait for - defaults to `INCREMENTAL` for SYNC_NOW, `RESYNC_WITH_EVOLVE` for RESYNC with `resync_mode=EVOLVE_AND_MERGE`, and `RESYNC_WITH_DROP_AND_LOAD` for RESYNC with `resync_mode=DROP_AND_LOAD`
+- `resync_mode` (ResyncMode, default: `EVOLVE_AND_MERGE`): Controls how destination tables are handled during resync - `EVOLVE_AND_MERGE` to evolve schema and merge data, `DROP_AND_LOAD` to drop and recreate tables (RESYNC action only)
 - `poll_interval` (int, default: `15`): Seconds between status checks
 - `retry_limit` (int, default: `10`): Maximum attempts to find active job after triggering
 

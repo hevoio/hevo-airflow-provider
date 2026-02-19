@@ -8,7 +8,7 @@ import pytest
 from airflow.exceptions import AirflowException, TaskDeferred
 
 from airflow.hevo.models.job import Job, JobCompletionStatus, JobType
-from airflow.hevo.models.pipeline import Pipeline, PipelineAction, PipelineStatus
+from airflow.hevo.models.pipeline import Pipeline, PipelineAction, PipelineStatus, ResyncMode
 from airflow.hevo.operators import HevoPipelineOperator
 
 
@@ -400,8 +400,8 @@ class TestHevoOperatorResyncAction:
         )
         result = op.execute(mock_airflow_context)
 
-        # Should call resync_pipeline_sync with default drop_and_load=False, not trigger_pipeline_sync
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+        # Should call resync_pipeline_sync with default resync_mode, not trigger_pipeline_sync
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
         mock_hook.trigger_pipeline_sync.assert_not_called()
         # Should NOT call validate_pipeline for RESYNC action
         mock_hook.validate_pipeline.assert_not_called()
@@ -459,8 +459,8 @@ class TestHevoOperatorResyncAction:
         with pytest.raises(TaskDeferred) as exc_info:
             op.execute(mock_airflow_context)
 
-        # Verify resync was called with default drop_and_load=False
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+        # Verify resync was called with default resync_mode
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
         mock_hook.validate_pipeline.assert_not_called()
 
         # Verify trigger was created correctly
@@ -495,8 +495,8 @@ class TestHevoOperatorResyncAction:
         with patch("airflow.hevo.operators.sleep"):
             result = op.execute(mock_airflow_context)
 
-        # Verify resync was called with default drop_and_load=False
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+        # Verify resync was called with default resync_mode
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
         mock_hook.validate_pipeline.assert_not_called()
         mock_hook.get_job_completion_status_sync.assert_called_once()
         assert result == "550e8400-e29b-41d4-a716-446655440001"
@@ -522,10 +522,10 @@ class TestHevoOperatorResyncAction:
         with pytest.raises(AirflowException, match="Resync failed"):
             op.execute(mock_airflow_context)
 
-    def test_resync_action_with_drop_and_load_true(
+    def test_resync_action_with_drop_and_load_resync_mode(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action with drop_and_load=True."""
+        """Test RESYNC action with resync_mode=DROP_AND_LOAD."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
@@ -541,19 +541,19 @@ class TestHevoOperatorResyncAction:
             connection_id="test_conn",
             pipeline_id=123,
             action=PipelineAction.RESYNC,
-            drop_and_load=True,
+            resync_mode=ResyncMode.DROP_AND_LOAD,
             wait_for_completion=False,
         )
         result = op.execute(mock_airflow_context)
 
-        # Should call resync_pipeline_sync with drop_and_load=True
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
+        # Should call resync_pipeline_sync with ResyncMode.DROP_AND_LOAD
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.DROP_AND_LOAD)
         assert result == "550e8400-e29b-41d4-a716-446655440001"
 
-    def test_resync_action_defaults_to_resync_job_type(
+    def test_resync_action_defaults_to_resync_with_evolve_job_type(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action defaults to RESYNC_WITH_EVOLVE job type when drop_and_load=False."""
+        """Test RESYNC action defaults to RESYNC_WITH_EVOLVE job type when resync_mode=EVOLVE_AND_MERGE."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
@@ -566,7 +566,7 @@ class TestHevoOperatorResyncAction:
         mock_pipeline.status = PipelineStatus.INITIALIZED
         mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
-        # Don't specify job_type - should default to RESYNC for RESYNC action with drop_and_load=False
+        # Don't specify job_type - should default to RESYNC_WITH_EVOLVE for RESYNC action with default resync_mode
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
@@ -576,14 +576,14 @@ class TestHevoOperatorResyncAction:
         )
         result = op.execute(mock_airflow_context)
 
-        # Verify it's looking for RESYNC job type
-        mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.RESYNC)
+        # Verify it's looking for RESYNC_WITH_EVOLVE job type
+        mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.RESYNC_WITH_EVOLVE)
         assert result == resync_job["job_id"]
 
-    def test_resync_action_with_drop_and_load_defaults_to_resync_with_drop_and_load_job_type(
+    def test_resync_action_with_drop_and_load_mode_defaults_to_resync_with_drop_and_load_job_type(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action defaults to RESYNC_WITH_DROP_AND_LOAD job type when drop_and_load=True."""
+        """Test RESYNC action defaults to RESYNC_WITH_DROP_AND_LOAD job type when resync_mode=DROP_AND_LOAD."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
@@ -596,13 +596,13 @@ class TestHevoOperatorResyncAction:
         mock_pipeline.status = PipelineStatus.INITIALIZED
         mock_hook.get_pipeline_sync.return_value = mock_pipeline
 
-        # Don't specify job_type - should default to RESYNC_WITH_DROP_AND_LOAD for RESYNC with drop_and_load=True
+        # Don't specify job_type - should default to RESYNC_WITH_DROP_AND_LOAD for RESYNC with resync_mode=DROP_AND_LOAD
         op = HevoPipelineOperator(
             task_id="test_task",
             connection_id="test_conn",
             pipeline_id=123,
             action=PipelineAction.RESYNC,
-            drop_and_load=True,
+            resync_mode=ResyncMode.DROP_AND_LOAD,
             wait_for_completion=False,
         )
         result = op.execute(mock_airflow_context)
@@ -668,10 +668,10 @@ class TestHevoOperatorResyncAction:
         mock_hook.find_active_job_by_type_sync.assert_called_once_with(pipeline_id=123, job_type=JobType.INCREMENTAL)
         assert result == incremental_job["job_id"]
 
-    def test_resync_action_drop_and_load_with_deferrable(
+    def test_resync_action_drop_and_load_mode_with_deferrable(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action with drop_and_load=True in deferrable mode."""
+        """Test RESYNC action with resync_mode=DROP_AND_LOAD in deferrable mode."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
@@ -688,7 +688,7 @@ class TestHevoOperatorResyncAction:
             connection_id="test_conn",
             pipeline_id=123,
             action=PipelineAction.RESYNC,
-            drop_and_load=True,
+            resync_mode=ResyncMode.DROP_AND_LOAD,
             deferrable=True,
             wait_for_completion=True,
         )
@@ -696,18 +696,18 @@ class TestHevoOperatorResyncAction:
         with pytest.raises(TaskDeferred) as exc_info:
             op.execute(mock_airflow_context)
 
-        # Verify drop_and_load=True was passed
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
+        # Verify resync_mode=DROP_AND_LOAD was passed
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.DROP_AND_LOAD)
 
         # Verify trigger was created with correct job_id
         trigger = exc_info.value.trigger
         assert trigger.pipeline_id == 123
         assert trigger.job_id == resync_drop_job["job_id"]
 
-    def test_resync_action_drop_and_load_with_synchronous_wait(
+    def test_resync_action_drop_and_load_mode_with_synchronous_wait(
         self, mock_hook_class, mock_airflow_context, sample_job_response
     ) -> None:
-        """Test RESYNC action with drop_and_load=True in synchronous wait mode."""
+        """Test RESYNC action with resync_mode=DROP_AND_LOAD in synchronous wait mode."""
         mock_hook = MagicMock()
         mock_hook_class.return_value = mock_hook
         mock_hook.resync_pipeline_sync.return_value = None
@@ -725,7 +725,7 @@ class TestHevoOperatorResyncAction:
             connection_id="test_conn",
             pipeline_id=123,
             action=PipelineAction.RESYNC,
-            drop_and_load=True,
+            resync_mode=ResyncMode.DROP_AND_LOAD,
             deferrable=False,
             wait_for_completion=True,
         )
@@ -733,8 +733,8 @@ class TestHevoOperatorResyncAction:
         with patch("airflow.hevo.operators.sleep"):
             result = op.execute(mock_airflow_context)
 
-        # Verify drop_and_load=True was passed
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, True)
+        # Verify resync_mode=DROP_AND_LOAD was passed
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.DROP_AND_LOAD)
         mock_hook.get_job_completion_status_sync.assert_called_once()
         assert result == resync_drop_job["job_id"]
 
@@ -780,7 +780,7 @@ class TestHevoOperatorResyncAction:
         mock_sleep.assert_called_with(1)  # poll_interval
 
         # Verify resync was called after pipeline became INITIALIZED
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
 
         # Should NOT call validate_pipeline for RESYNC action
         mock_hook.validate_pipeline.assert_not_called()
@@ -824,7 +824,7 @@ class TestHevoOperatorResyncAction:
         assert mock_sleep.call_count == 50
 
         # Verify resync was eventually called
-        mock_hook.resync_pipeline_sync.assert_called_once_with(123, False)
+        mock_hook.resync_pipeline_sync.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
 
         assert result == "550e8400-e29b-41d4-a716-446655440001"
 

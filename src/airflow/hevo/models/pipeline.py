@@ -58,6 +58,19 @@ class PipelineAction(str, Enum):
     RESYNC = "RESYNC"
 
 
+class ResyncMode(str, Enum):
+    """
+    Resync mode for pipeline resync operations.
+
+    Defines how destination tables are handled during a resync:
+    - EVOLVE_AND_MERGE: Evolve the destination schema and merge data (default)
+    - DROP_AND_LOAD: Drop existing destination tables and reload from scratch
+    """
+
+    EVOLVE_AND_MERGE = "EVOLVE_AND_MERGE"
+    DROP_AND_LOAD = "DROP_AND_LOAD"
+
+
 class ReplicationType(str, Enum):
     """
     Pipeline replication type values.

@@ -9,7 +9,7 @@ from airflow.exceptions import AirflowException
 
 from airflow.hevo.hooks import HevoPipelineHook
 from airflow.hevo.models.job import Job, JobCompletionStatus, JobStatus, JobType
-from airflow.hevo.models.pipeline import Pipeline, PipelineStatus
+from airflow.hevo.models.pipeline import Pipeline, PipelineStatus, ResyncMode
 
 
 def create_job_response(**overrides) -> dict:
@@ -701,7 +701,7 @@ class TestResyncPipelineAsync:
 
     @pytest.mark.asyncio
     async def test_resync_pipeline_success(self) -> None:
-        """Test successful pipeline resync with default drop_and_load."""
+        """Test successful pipeline resync with default resync_mode."""
         hook = HevoPipelineHook()
 
         with patch.object(hook, "execute_api_request_async", new_callable=AsyncMock) as mock_request:
@@ -710,21 +710,21 @@ class TestResyncPipelineAsync:
             await hook.resync_pipeline_async(123)
 
             mock_request.assert_called_once_with(
-                method="POST", endpoint="/api/v1/pipelines/123/actions/resync", payload={"drop_and_load": False}
+                method="POST", endpoint="/api/v1/pipelines/123/actions/resync", payload={"resync_mode": "EVOLVE_AND_MERGE"}
             )
 
     @pytest.mark.asyncio
-    async def test_resync_pipeline_with_drop_and_load(self) -> None:
-        """Test pipeline resync with drop_and_load=True."""
+    async def test_resync_pipeline_with_drop_and_load_mode(self) -> None:
+        """Test pipeline resync with resync_mode=DROP_AND_LOAD."""
         hook = HevoPipelineHook()
 
         with patch.object(hook, "execute_api_request_async", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = {}
 
-            await hook.resync_pipeline_async(123, drop_and_load=True)
+            await hook.resync_pipeline_async(123, resync_mode=ResyncMode.DROP_AND_LOAD)
 
             mock_request.assert_called_once_with(
-                method="POST", endpoint="/api/v1/pipelines/123/actions/resync", payload={"drop_and_load": True}
+                method="POST", endpoint="/api/v1/pipelines/123/actions/resync", payload={"resync_mode": "DROP_AND_LOAD"}
             )
 
 
@@ -732,7 +732,7 @@ class TestResyncPipelineSync:
     """Tests for resync_pipeline synchronous wrapper."""
 
     def test_resync_pipeline_sync_wrapper(self) -> None:
-        """Test synchronous wrapper calls async method with default drop_and_load."""
+        """Test synchronous wrapper calls async method with default resync_mode."""
         hook = HevoPipelineHook()
 
         with patch.object(hook, "resync_pipeline_async", new_callable=AsyncMock) as mock_async:
@@ -740,18 +740,18 @@ class TestResyncPipelineSync:
 
             hook.resync_pipeline_sync(123)
 
-            mock_async.assert_called_once_with(123, False)
+            mock_async.assert_called_once_with(123, ResyncMode.EVOLVE_AND_MERGE)
 
-    def test_resync_pipeline_sync_wrapper_with_drop_and_load(self) -> None:
-        """Test synchronous wrapper calls async method with drop_and_load=True."""
+    def test_resync_pipeline_sync_wrapper_with_drop_and_load_mode(self) -> None:
+        """Test synchronous wrapper calls async method with resync_mode=DROP_AND_LOAD."""
         hook = HevoPipelineHook()
 
         with patch.object(hook, "resync_pipeline_async", new_callable=AsyncMock) as mock_async:
             mock_async.return_value = None
 
-            hook.resync_pipeline_sync(123, drop_and_load=True)
+            hook.resync_pipeline_sync(123, resync_mode=ResyncMode.DROP_AND_LOAD)
 
-            mock_async.assert_called_once_with(123, True)
+            mock_async.assert_called_once_with(123, ResyncMode.DROP_AND_LOAD)
 
 
 class TestCancelJobAsync:

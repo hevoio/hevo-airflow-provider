@@ -27,6 +27,7 @@ from airflow.hevo.models.pipeline import (
     Pipeline,
     PipelineAction,
     ReplicationType,
+    ResyncMode,
     Schedule,
     SchemaEvolution,
     Source,
@@ -50,6 +51,7 @@ __all__ = [
     "SyncType",
     "PipelineAction",
     "ReplicationType",
+    "ResyncMode",
     "PipelineLoadMode",
     "SchemaEvolution",
     # Job models

@@ -8,7 +8,7 @@ from airflow.exceptions import AirflowException
 from airflow.hevo.hooks.base import BaseHevoHook
 from airflow.hevo.models import Job, PaginatedJobsResponse, Pipeline
 from airflow.hevo.models.job import JobCompletionStatus, JobStatus, JobType
-from airflow.hevo.models.pipeline import PipelineStatus
+from airflow.hevo.models.pipeline import PipelineStatus, ResyncMode
 
 
 class HevoPipelineHook(BaseHevoHook):
@@ -294,7 +294,9 @@ class HevoPipelineHook(BaseHevoHook):
         await self.execute_api_request_async(method="POST", endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/enable")
         self.log.info("Pipeline %s enabled successfully", pipeline_id)
 
-    async def resync_pipeline_async(self, pipeline_id: int, drop_and_load: bool = False) -> None:
+    async def resync_pipeline_async(
+        self, pipeline_id: int, resync_mode: ResyncMode = ResyncMode.EVOLVE_AND_MERGE
+    ) -> None:
         """
         Trigger a full historical resync for the pipeline (async).
 
@@ -303,12 +305,13 @@ class HevoPipelineHook(BaseHevoHook):
         schema changes.
 
         :param pipeline_id: Unique pipeline identifier.
-        :param drop_and_load: When ``True``, drops existing destination tables before loading.
-                             Ensures a clean slate by recreating tables from scratch. Default: ``False``.
+        :param resync_mode: Controls how destination tables are handled during resync.
+                           ``EVOLVE_AND_MERGE`` evolves schema and merges data (default).
+                           ``DROP_AND_LOAD`` drops and recreates tables from scratch.
         :raises AirflowException: For API errors (auth, network, server errors).
         """
-        self.log.info("Triggering resync for pipeline %s (drop_and_load=%s)", pipeline_id, drop_and_load)
-        payload = {"drop_and_load": drop_and_load}
+        self.log.info("Triggering resync for pipeline %s (resync_mode=%s)", pipeline_id, resync_mode.value)
+        payload = {"resync_mode": resync_mode.value}
         await self.execute_api_request_async(
             method="POST", endpoint=f"/api/v1/pipelines/{pipeline_id}/actions/resync", payload=payload
         )
@@ -425,13 +428,15 @@ class HevoPipelineHook(BaseHevoHook):
         """
         return asyncio.run(self.enable_pipeline_async(pipeline_id))
 
-    def resync_pipeline_sync(self, pipeline_id: int, drop_and_load: bool = False) -> None:
+    def resync_pipeline_sync(
+        self, pipeline_id: int, resync_mode: ResyncMode = ResyncMode.EVOLVE_AND_MERGE
+    ) -> None:
         """
         Trigger a full historical resync for the pipeline (sync wrapper).
 
         See resync_pipeline_async() for full documentation.
         """
-        return asyncio.run(self.resync_pipeline_async(pipeline_id, drop_and_load))
+        return asyncio.run(self.resync_pipeline_async(pipeline_id, resync_mode))
 
     def cancel_job_sync(self, pipeline_id: int, job_id: str) -> None:
         """

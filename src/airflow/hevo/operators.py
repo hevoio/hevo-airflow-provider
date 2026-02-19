@@ -9,7 +9,7 @@ from airflow.models import BaseOperator
 
 from airflow.hevo.hooks import HevoPipelineHook
 from airflow.hevo.models.job import JobCompletionStatus, JobType
-from airflow.hevo.models.pipeline import PipelineAction, PipelineStatus
+from airflow.hevo.models.pipeline import PipelineAction, PipelineStatus, ResyncMode
 from airflow.hevo.trigger import HevoTrigger
 
 if TYPE_CHECKING:
@@ -37,8 +37,8 @@ class HevoPipelineOperator(BaseOperator):
                   - RESYNC: Full historical resync (waits indefinitely for INITIALIZED state before triggering)
     :param job_type: Type of job to wait for. Defaults intelligently based on action:
                     - SYNC_NOW: JobType.INCREMENTAL (default)
-                    - RESYNC with drop_and_load=False: JobType.RESYNC_WITH_EVOLVE (default)
-                    - RESYNC with drop_and_load=True: JobType.RESYNC_WITH_DROP_AND_LOAD (default)
+                    - RESYNC with resync_mode=EVOLVE_AND_MERGE: JobType.RESYNC_WITH_EVOLVE (default)
+                    - RESYNC with resync_mode=DROP_AND_LOAD: JobType.RESYNC_WITH_DROP_AND_LOAD (default)
                     Used when discovering the active job after triggering.
     :param connection_id: Airflow connection ID for Hevo API credentials (default: hevo_airflow_conn_id).
     :param poll_interval: Seconds between status checks when waiting (default: 15).
@@ -55,9 +55,10 @@ class HevoPipelineOperator(BaseOperator):
                           If False, proceeds normally even if a job already exists.
                           Useful to prevent triggering duplicate jobs when previous jobs are still running.
                           Only applies to SYNC_NOW action.
-    :param drop_and_load: If True, drops existing destination tables before loading (default: False).
-                         Only applies to RESYNC action. When enabled, destination tables are dropped
-                         and recreated, ensuring a clean slate for the historical data reload.
+    :param resync_mode: Controls how destination tables are handled during resync
+                       (default: ResyncMode.EVOLVE_AND_MERGE). Only applies to RESYNC action.
+                       - EVOLVE_AND_MERGE: Evolve the destination schema and merge data
+                       - DROP_AND_LOAD: Drop existing destination tables and reload from scratch
     """
 
     template_fields = ("pipeline_id",)
@@ -74,17 +75,17 @@ class HevoPipelineOperator(BaseOperator):
         wait_for_completion: bool = True,
         accept_completed_with_failures: bool = False,
         ensure_new_job: bool = True,
-        drop_and_load: bool = False,
+        resync_mode: ResyncMode = ResyncMode.EVOLVE_AND_MERGE,
         **kwargs,
     ) -> None:
         self.pipeline_id = pipeline_id
         self.action = action
         self.poll_interval = poll_interval
         self.connection_id = connection_id
-        self.drop_and_load = drop_and_load
+        self.resync_mode = resync_mode
         if job_type is None:
-            if action == PipelineAction.RESYNC_WITH_EVOLVE:
-                self.job_type = JobType.RESYNC_WITH_DROP_AND_LOAD if drop_and_load else JobType.RESYNC_WITH_EVOLVE
+            if action == PipelineAction.RESYNC:
+                self.job_type = JobType.RESYNC_WITH_DROP_AND_LOAD if resync_mode == ResyncMode.DROP_AND_LOAD else JobType.RESYNC_WITH_EVOLVE
             else:
                 self.job_type = JobType.INCREMENTAL
         else:
@@ -130,11 +131,11 @@ class HevoPipelineOperator(BaseOperator):
             self._wait_for_pipeline_initialized()
 
             self.log.info(
-                "Triggering full historical resync for pipeline %s (drop_and_load=%s)",
+                "Triggering full historical resync for pipeline %s (resync_mode=%s)",
                 self.pipeline_id,
-                self.drop_and_load,
+                self.resync_mode.value,
             )
-            hook.resync_pipeline_sync(self.pipeline_id, self.drop_and_load)
+            hook.resync_pipeline_sync(self.pipeline_id, self.resync_mode)
             self.log.info("Resync triggered successfully for pipeline %s", self.pipeline_id)
 
         # Wait for the active job to appear
