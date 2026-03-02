@@ -164,7 +164,9 @@ HevoPipelineOperator(
 - **No retry limit** - will wait indefinitely until pipeline reaches INITIALIZED status
 - Re-ingests all data from the source (complete historical reload)
 - Ignores `ensure_new_job` parameter
-- **Default job type**: `TRUNCATE_AND_LOAD`
+- **Default job type**:
+  - `RESYNC` when `drop_and_load=False` (default)
+  - `RESYNC_WITH_DROP_AND_LOAD` when `drop_and_load=True`
 - **Optional parameter**: `drop_and_load` (default: False) to drop data and load them to destination tables
 - **Use for**:
   - Reprocessing data after schema changes

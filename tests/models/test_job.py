@@ -33,7 +33,8 @@ class TestJobEnums:
         """Test all JobType enum values are correct."""
         assert JobType.INCREMENTAL == "INCREMENTAL"
         assert JobType.HISTORICAL == "HISTORICAL"
-        assert JobType.TRUNCATE_AND_LOAD == "TRUNCATE_AND_LOAD"
+        assert JobType.RESYNC == "RESYNC"
+        assert JobType.RESYNC_WITH_DROP_AND_LOAD == "RESYNC_WITH_DROP_AND_LOAD"
 
     def test_job_completion_status_enum_values(self) -> None:
         """Test all JobCompletionStatus enum values are correct."""

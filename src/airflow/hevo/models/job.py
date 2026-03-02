@@ -36,7 +36,8 @@ class JobType(str, Enum):
 
     INCREMENTAL = "INCREMENTAL"
     HISTORICAL = "HISTORICAL"
-    TRUNCATE_AND_LOAD = "TRUNCATE_AND_LOAD"
+    RESYNC = "RESYNC"
+    RESYNC_WITH_DROP_AND_LOAD = "RESYNC_WITH_DROP_AND_LOAD"
     REFRESHER = "REFRESHER"
 
 
@@ -77,7 +78,9 @@ class Job(BaseResponse):
     """
 
     job_id: str = Field(..., description="Unique job identifier (UUID)")
-    type: Union[JobType, str] = Field(..., description="Job type (INCREMENTAL, HISTORICAL, TRUNCATE_AND_LOAD)")
+    type: Union[JobType, str] = Field(
+        ..., description="Job type (INCREMENTAL, HISTORICAL, RESYNC, RESYNC_WITH_DROP_AND_LOAD)"
+    )
     status: Union[JobStatus, str] = Field(..., description="Current job status")
     created_ts: int = Field(..., description="Job creation timestamp in milliseconds since epoch")
     updated_ts: int = Field(..., description="Last update timestamp in milliseconds since epoch")
