@@ -108,52 +108,7 @@ ruff check src/
 
 ---
 
-## Option 3: Production Installation (For Airflow Users)
-
-### Prerequisites
-
-- Existing Apache Airflow 2.4.0+ installation
-- Python 3.9+
-
-### Step 1: Install from PyPI (When Published)
-
-```bash
-pip install apache-airflow-providers-hevo
-```
-
-### Step 2: Install from Source (Development/Testing)
-
-```bash
-# Clone repository
-git clone https://github.com/hevoio/hevo-airflow-provider.git
-cd hevo-airflow-provider
-
-# Install in your Airflow environment
-pip install .
-```
-
-### Step 3: Configure Hevo Connection
-
-1. Open Airflow UI at `http://localhost:8080`
-2. Navigate to **Admin → Connections**
-3. Click **+ Add a new record**
-4. Configure the connection:
-
-   ```
-   Connection ID: hevo_airflow_conn_id
-   Connection Type: HTTP
-   Host: us.hevodata.com (or your region: eu.hevodata.com, in.hevodata.com)
-   Schema: https
-   Login: <your_api_username>
-   Password: <your_api_key>
-   Extra: {"headers": {"X-Custom-Header": "value"}}  # Optional
-   ```
-
-5. Click **Save**
-
----
-
-## Option 4: Docker Setup
+## Option 3: Docker Setup
 
 The provider includes Docker configurations for testing with different Airflow versions.
 
