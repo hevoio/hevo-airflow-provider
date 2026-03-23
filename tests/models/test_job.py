@@ -62,8 +62,6 @@ class TestJobModel:
         assert job.objects_queued == 2
         assert job.objects_skipped == 0
         assert job.objects_failed == 0
-        assert job.billable_events == 1000
-        assert job.non_billable_events == 0
         assert job.duration == 60000
         assert job.min_latency == 100
         assert job.max_latency == 5000

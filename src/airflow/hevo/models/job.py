@@ -96,10 +96,6 @@ class Job(BaseResponse):
     objects_skipped: int = Field(..., description="Objects bypassed during execution")
     objects_failed: int = Field(..., description="Objects that encountered errors")
 
-    # Billing metrics
-    billable_events: int = Field(..., description="Chargeable event count")
-    non_billable_events: int = Field(..., description="Non-chargeable event count")
-
     # Performance metrics
     duration: int = Field(..., description="Execution time in milliseconds")
     min_latency: Optional[int] = Field(None, description="Minimum object-level latency in milliseconds")

@@ -106,8 +106,6 @@ def create_job_response(**overrides) -> dict:
         "objects_queued": 2,
         "objects_skipped": 0,
         "objects_failed": 0,
-        "billable_events": 1000,
-        "non_billable_events": 0,
         "duration": 60000,
         "min_latency": 100,
         "max_latency": 5000,
@@ -138,8 +136,6 @@ def sample_job_response():
         "objects_queued": 2,
         "objects_skipped": 0,
         "objects_failed": 0,
-        "billable_events": 1000,
-        "non_billable_events": 0,
         "duration": 60000,  # 60 seconds in milliseconds
         "min_latency": 100,
         "max_latency": 5000,
@@ -168,8 +164,6 @@ def sample_completed_job_response():
         "objects_queued": 0,
         "objects_skipped": 0,
         "objects_failed": 0,
-        "billable_events": 10000,
-        "non_billable_events": 0,
         "duration": 300000,  # 5 minutes in milliseconds
         "min_latency": 50,
         "max_latency": 3000,
@@ -197,8 +191,6 @@ def sample_failed_job_response():
         "objects_queued": 0,
         "objects_skipped": 0,
         "objects_failed": 2,
-        "billable_events": 500,
-        "non_billable_events": 0,
         "duration": 180000,  # 3 minutes in milliseconds
         "min_latency": 200,
         "max_latency": 8000,
