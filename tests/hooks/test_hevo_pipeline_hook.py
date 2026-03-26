@@ -35,8 +35,6 @@ def create_job_response(**overrides) -> dict:
         "objects_queued": 2,
         "objects_skipped": 0,
         "objects_failed": 0,
-        "billable_events": 1000,
-        "non_billable_events": 0,
         "duration": 60000,
         "min_latency": 100,
         "max_latency": 5000,
