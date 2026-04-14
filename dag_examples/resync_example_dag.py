@@ -16,6 +16,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -79,11 +80,14 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
     if not batch_id:
         return
 
-    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON")
+    schema = Variable.get("resync_example_snowflake_schema")
+    snowflake_hook = SnowflakeHook(
+        snowflake_conn_id="snowflake_default",
+    )
 
-    query = """
+    query = f"""
     SELECT id, batch_id, generated_at, value_int, value_text, payload
-    FROM NO_WAIT_AIRFLOW_X_HEVO.resync_example_table
+    FROM {schema}.resync_example_table
     WHERE batch_id = %s
     ORDER BY id DESC
     LIMIT 1;
@@ -128,7 +132,7 @@ load_data_task = PythonOperator(
 resync_deferrable = HevoPipelineOperator(
     task_id="resync_pipeline_deferrable",
     connection_id="hevo_airflow_conn_id",
-    pipeline_id="{{ var.value.pipeline_id }}",
+    pipeline_id="{{ var.value.resync_example_pipeline_id }}",
     action=PipelineAction.RESYNC,  # Trigger full historical resync
     deferrable=True,  # Release worker slot (requires triggerer)
     wait_for_completion=True,  # Wait for job to complete

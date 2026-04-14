@@ -6,7 +6,16 @@ FROM apache/airflow:3.0.6-python3.12
 # Set environment variables
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=False \
     AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dag_examples \
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True \
+    AIRFLOW__API__HOST=0.0.0.0 \
+    AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager \
+    _AIRFLOW_WWW_USER_CREATE=true \
+    _AIRFLOW_WWW_USER_USERNAME=admin \
+    _AIRFLOW_WWW_USER_PASSWORD=admin \
+    _AIRFLOW_WWW_USER_ROLE=Admin \
+    _AIRFLOW_WWW_USER_FIRSTNAME=Admin \
+    _AIRFLOW_WWW_USER_LASTNAME=User \
+    _AIRFLOW_WWW_USER_EMAIL=admin@example.com
 
 # Switch to root to install system dependencies
 USER root
@@ -34,6 +43,10 @@ COPY --chown=airflow:airflow . /opt/hevo-airflow-provider
 # Copy requirements file
 COPY --chown=airflow:airflow docker/airflow-3.0/requirements.txt ./requirements.txt
 
+# Copy entrypoint script
+COPY --chown=airflow:airflow docker/airflow-3.0/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Install additional dependencies and Hevo provider
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir -e /opt/hevo-airflow-provider
@@ -45,7 +58,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD airflow jobs check --job-type SchedulerJob --hostname "$(hostname)"
 
-# Default command - run Airflow standalone
-# This will automatically initialize the database and create an admin user
-CMD ["airflow", "standalone"]
+# Use custom entrypoint to init DB, create user, and start all services
+ENTRYPOINT ["/bin/bash", "/opt/airflow/entrypoint.sh"]
 

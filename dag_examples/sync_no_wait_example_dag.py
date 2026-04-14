@@ -86,7 +86,7 @@ load_data_task = PythonOperator(
 # Task 2: Trigger HevoOperator without waiting for completion (returns job_id)
 trigger_hevo_task = HevoPipelineOperator(
     task_id="trigger_hevo_sync",
-    pipeline_id="{{ var.value.pipeline_id }}",
+    pipeline_id="{{ var.value.no_wait_pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
     wait_for_completion=False,  # Key parameter: don't wait for completion
     deferrable=False,

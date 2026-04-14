@@ -12,6 +12,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -85,11 +86,14 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
     if not batch_id:
         return
 
-    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON")
+    schema = Variable.get("sync_sensor_wait_snowflake_schema")
+    snowflake_hook = SnowflakeHook(
+        snowflake_conn_id="snowflake_default",
+    )
 
-    query = """
+    query = f"""
     SELECT id, batch_id, generated_at, value_int, value_text, payload
-    FROM NO_WAIT_AIRFLOW_X_HEVO.sensor_wait_example_table
+    FROM {schema}.sensor_wait_example_table
     WHERE batch_id = %s
     ORDER BY id DESC
     LIMIT 1;
@@ -123,7 +127,7 @@ load_data_task = PythonOperator(
 # This will return the job_id via XCom
 trigger_hevo_task = HevoPipelineOperator(
     task_id="trigger_hevo_sync",
-    pipeline_id="{{ var.value.pipeline_id }}",  # Update with your pipeline ID
+    pipeline_id="{{ var.value.sync_sensor_wait_pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
     wait_for_completion=False,  # Key parameter: don't wait for completion, returns job_id
     deferrable=False,
@@ -134,7 +138,7 @@ trigger_hevo_task = HevoPipelineOperator(
 # The sensor uses the job_id from the operator via XCom templating
 wait_for_job_sensor = HevoSensor(
     task_id="wait_for_job_completion",
-    pipeline_id="{{ var.value.pipeline_id }}",  # Update with your pipeline ID
+    pipeline_id="{{ var.value.sync_sensor_wait_pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
     job_id="{{ ti.xcom_pull(task_ids='trigger_hevo_sync') }}",  # Get job_id from operator via XCom
     deferrable=True,  # Use deferrable mode for async execution
