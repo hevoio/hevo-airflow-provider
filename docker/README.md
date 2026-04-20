@@ -154,18 +154,41 @@ Before starting, ensure you have:
      ```
    - Click Save
 
-6. **Configure pipeline variable** in Airflow UI (Admin → Variables):
-   - Go to Admin → Variables
-   - Click "+" to add a new variable
-   - Key: `pipeline_id`
-   - Value: Your Hevo pipeline ID (e.g., `123`)
-   - Click Save
+6. **Configure variables** in Airflow UI (Admin → Variables):
+
+   Go to Admin → Variables and click "+" to add each variable below.
+
+   **Shared variable (all DAGs):**
+
+   | Key | Value |
+   |-----|-------|
+   | `snowflake_warehouse` | Your Snowflake warehouse name |
+
+   **Per-DAG variables** — set only for the DAGs you intend to run:
+
+   | DAG | Key | Value |
+   |-----|-----|-------|
+   | `hevo_triggerer_example` | `triggerer_example_pipeline_id` | Your Hevo pipeline ID |
+   | | `triggerer_example_snowflake_database` | Your Snowflake database |
+   | | `triggerer_example_snowflake_schema` | Your Snowflake schema |
+   | `hevo_wait_sync_table_operator_example` | `sync_synchronous_wait_pipeline_id` | Your Hevo pipeline ID |
+   | | `sync_synchronous_wait_snowflake_database` | Your Snowflake database |
+   | | `sync_synchronous_wait_snowflake_schema` | Your Snowflake schema |
+   | `hevo_trigger_sync_with_sensor_wait_example` | `sync_sensor_wait_pipeline_id` | Your Hevo pipeline ID |
+   | | `sync_sensor_wait_snowflake_database` | Your Snowflake database |
+   | | `sync_sensor_wait_snowflake_schema` | Your Snowflake schema |
+   | `hevo_resync_example` | `resync_example_pipeline_id` | Your Hevo pipeline ID |
+   | | `resync_example_snowflake_database` | Your Snowflake database |
+   | | `resync_example_snowflake_schema` | Your Snowflake schema |
+   | `hevo_no_wait_operator_example` | `no_wait_pipeline_id` | Your Hevo pipeline ID |
+   | `hevo_dbt_example` | `pipeline_id_1` | First Hevo pipeline ID |
+   | | `pipeline_id_2` | Second Hevo pipeline ID |
 
    **Note**: You can find your pipeline ID in the Hevo dashboard URL or pipeline details page.
 
 7. **Run your first DAG**:
-   - Enable the `triggerer_example_dag`
-   - The DAG will automatically use the `pipeline_id` variable you configured
+   - Enable the `hevo_triggerer_example` DAG
+   - Ensure `triggerer_example_pipeline_id` and the Snowflake variables are set
    - Click "Trigger DAG"
 
 That's it! You're now running Hevo pipelines from Airflow.
