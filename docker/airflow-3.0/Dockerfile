@@ -7,6 +7,7 @@ FROM apache/airflow:3.0.6-python3.12
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=False \
     AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dag_examples \
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True \
+    AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8087 \
     AIRFLOW__API__HOST=0.0.0.0 \
     AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager \
     _AIRFLOW_WWW_USER_CREATE=true \
