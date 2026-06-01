@@ -22,5 +22,5 @@ airflow scheduler &
 echo "Starting Airflow triggerer..."
 airflow triggerer &
 
-echo "Starting Airflow api-server on port 8080..."
-exec airflow api-server --port 8080
+echo "Starting Airflow api-server on port 8087..."
+exec airflow api-server --port 8087
