@@ -52,7 +52,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir -e /opt/hevo-airflow-provider
 
 # Expose Airflow webserver port
-EXPOSE 8080
+EXPOSE 8087
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
