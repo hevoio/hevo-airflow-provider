@@ -11,6 +11,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
@@ -83,11 +84,14 @@ def fetch_and_log_latest_entry_from_warehouse(**context: Any) -> None:
     if not batch_id:
         return
 
-    snowflake_hook = SnowflakeHook(snowflake_conn_id="snowflake_default", warehouse="HOGWARTS", database="RON")
+    schema = Variable.get("triggerer_example_snowflake_schema")
+    snowflake_hook = SnowflakeHook(
+        snowflake_conn_id="snowflake_default",
+    )
 
-    query = """
+    query = f"""
     SELECT id, batch_id, generated_at, value_int, value_text, payload
-    FROM NO_WAIT_AIRFLOW_X_HEVO.triggerer_example_table
+    FROM {schema}.triggerer_example_table
     WHERE batch_id = %s
     ORDER BY id DESC
     LIMIT 1
@@ -120,7 +124,7 @@ load_data_task = PythonOperator(
 # Task 2: Trigger HevoOperator waiting for completion in deferrable mode
 trigger_hevo_task = HevoPipelineOperator(
     task_id="trigger_hevo_sync",
-    pipeline_id="{{ var.value.pipeline_id }}",
+    pipeline_id="{{ var.value.triggerer_example_pipeline_id }}",
     connection_id="hevo_airflow_conn_id",
     wait_for_completion=True,  # wait for completion
     deferrable=True,  # run in deferrable/triggerer mode

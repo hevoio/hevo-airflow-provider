@@ -141,11 +141,10 @@ This will:
 ### Step 4: Start Airflow Container
 
 ```bash
- docker run -d  \
-      --name hevo-airflow-3.0   \
-      -p 8080:8080   \
-      -e AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0   \
-      -v ./dag_examples:/opt/airflow/dag_examples   \
+docker run -d \
+      --name hevo-airflow-3.0 \
+      -p 8080:8080 \
+      -v ./dag_examples:/opt/airflow/dag_examples \
       hevo-airflow-3.0
 ```
 
@@ -155,19 +154,45 @@ Open your browser and navigate to `http://localhost:8080`
 
 **Default credentials:**
 - Username: `admin`
-- Password: <generated password> fetch password using the following command
+- Password: `admin`
 
-  ```bash
-  docker logs -f hevo-airflow-3.0 | grep -A 5 "admin"
-  ```
+### Step 6: Configure Airflow Variables for Example DAGs
 
-### Step 6: View Container Logs (Optional)
+Go to **Admin → Variables** in the Airflow UI and add the following variables.
+
+**Shared variable (used by all Snowflake DAGs):**
+
+| Key | Value |
+|-----|-------|
+| `snowflake_warehouse` | Your Snowflake warehouse name |
+
+**Per-DAG variables** — set only for the DAGs you intend to run:
+
+| DAG | Key | Value |
+|-----|-----|-------|
+| `hevo_triggerer_example` | `triggerer_example_pipeline_id` | Your Hevo pipeline ID |
+| | `triggerer_example_snowflake_database` | Your Snowflake database |
+| | `triggerer_example_snowflake_schema` | Your Snowflake schema |
+| `hevo_wait_sync_table_operator_example` | `sync_synchronous_wait_pipeline_id` | Your Hevo pipeline ID |
+| | `sync_synchronous_wait_snowflake_database` | Your Snowflake database |
+| | `sync_synchronous_wait_snowflake_schema` | Your Snowflake schema |
+| `hevo_trigger_sync_with_sensor_wait_example` | `sync_sensor_wait_pipeline_id` | Your Hevo pipeline ID |
+| | `sync_sensor_wait_snowflake_database` | Your Snowflake database |
+| | `sync_sensor_wait_snowflake_schema` | Your Snowflake schema |
+| `hevo_resync_example` | `resync_example_pipeline_id` | Your Hevo pipeline ID |
+| | `resync_example_snowflake_database` | Your Snowflake database |
+| | `resync_example_snowflake_schema` | Your Snowflake schema |
+| `hevo_no_wait_operator_example` | `no_wait_pipeline_id` | Your Hevo pipeline ID |
+| `hevo_dbt_example` | `pipeline_id_1` | First Hevo pipeline ID |
+| | `pipeline_id_2` | Second Hevo pipeline ID |
+
+### Step 7: View Container Logs (Optional)
 
 ```bash
 docker logs -f hevo-airflow-3.0
 ```
 
-### Step 7: Stop Container (When Needed)
+### Step 8: Stop Container (When Needed)
 
 ```bash
 docker stop hevo-airflow-3.0
